@@ -442,6 +442,22 @@
             display: flex;
         }
 
+        .adaptive-banner {
+            display: none;
+            margin: 8px 0 2px;
+            padding: 10px 12px;
+            border-radius: 12px;
+            background: rgba(255, 0, 0, 0.12);
+            border: 1px solid rgba(255, 0, 0, 0.24);
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 0.78rem;
+            line-height: 1.45;
+        }
+
+        .adaptive-banner.visible {
+            display: block;
+        }
+
         .quality-btn {
             padding: 10px 16px;
             border: 1px solid rgba(255, 255, 255, 0.2);
@@ -851,6 +867,16 @@
             width: 0%;
         }
 
+        .progress-bar-fill.indeterminate {
+            width: 30%;
+            animation: progress-sweep 1.2s ease-in-out infinite alternate;
+        }
+
+        @keyframes progress-sweep {
+            from { transform: translateX(0); }
+            to { transform: translateX(230%); }
+        }
+
         .player-shell {
             display: none;
             margin-top: 0;
@@ -885,32 +911,15 @@
             object-fit: contain;
         }
 
-        .subtitle-overlay {
-            position: absolute;
-            left: 5%;
-            right: 5%;
-            bottom: 7%;
-            z-index: 2;
-            pointer-events: none;
-            display: flex;
-            justify-content: center;
-            text-align: center;
-        }
-
-        .subtitle-text {
-            max-width: 100%;
-            padding: 10px 14px;
-            border-radius: 14px;
-            background: rgba(0, 0, 0, 0.34);
-            color: #fff;
-            font-size: clamp(18px, 2vw, 30px);
-            font-weight: 700;
-            line-height: 1.35;
+        /* Style des sous-titres (WebVTT) */
+        .video-board video::cue {
+            background-color: rgba(8, 8, 8, 0.75);
+            color: #ffffff;
+            font-family: "YouTube Noto", Roboto, "Arial", sans-serif;
+            font-size: 0.9em;
+            line-height: 1.2;
             white-space: pre-line;
-            text-shadow:
-                0 2px 0 rgba(0, 0, 0, 0.95),
-                0 0 10px rgba(0, 0, 0, 0.75),
-                0 0 24px rgba(0, 0, 0, 0.55);
+            text-align: center;
         }
 
         .control-cluster {
@@ -1030,19 +1039,6 @@
         }
 
         .local-file-name {
-            min-height: 20px;
-            color: rgba(255, 255, 255, 0.72);
-            font-size: 0.84rem;
-        }
-
-        .subtitle-tools {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 10px;
-            margin-top: 8px;
-        }
-
-        .subtitle-file-name {
             min-height: 20px;
             color: rgba(255, 255, 255, 0.72);
             font-size: 0.84rem;
@@ -1170,16 +1166,17 @@
                 </div>
 
                 <div class="topbar-right">
+                    <a href="/" style="padding:9px 16px;border-radius:999px;text-decoration:none;font-size:0.86rem;font-weight:600;color:rgba(255,255,255,0.85);background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.12)">← Menu</a>
                     <div class="ffmpeg-status">
                         <span class="dot" id="ffmpegDot"></span>
-                        <span id="ffmpegText">FFmpeg: verification...</span>
+                        <span id="ffmpegText" data-i18n="ffmpeg_checking">FFmpeg: verification...</span>
                     </div>
                 </div>
             </header>
 
             <section class="hero">
                 <div class="hero-copy">
-                    <div class="eyebrow">YouTube · Twitch · Vimeo · TikTok · +1000 sites</div>
+                    <div class="eyebrow">Universal Media Downloader · +1000 sites supportés</div>
                     <h2>Telecharge et regarde tes videos.</h2>
                     <p>
                         Colle n'importe quelle URL (YouTube, Twitch, Vimeo, TikTok, Twitter/X,
@@ -1214,7 +1211,7 @@
                                 id="videoUrl"
                                 name="videoUrl"
                                 type="text"
-                                placeholder="https://www.youtube.com/watch?v=… ou https://www.twitch.tv/…"
+                                placeholder="https://www.youtube.com/watch?v=... ou n'importe quelle URL de média"
                                 autocomplete="off"
                             >
                         </div>
@@ -1224,13 +1221,6 @@
                             <input id="localVideoFile" type="file" accept="video/*,audio/*,.mkv,.m4v,.avi,.mov,.webm" hidden>
                         </div>
                         <div class="local-file-name" id="localFileName">Aucun fichier local selectionne.</div>
-
-                        <label class="field-label">Sous-titres ASS locaux</label>
-                        <div class="subtitle-tools">
-                            <button class="btn btn-secondary" type="button" id="pickSubtitleFile">Choisir un .ass ou .srt</button>
-                            <input id="subtitleFile" type="file" accept=".ass,.srt" hidden>
-                        </div>
-                        <div class="subtitle-file-name" id="subtitleFileName">Aucun fichier de sous-titres selectionne.</div>
 
                         <label class="field-label">Type de telechargement</label>
                         <div class="download-type-selector">
@@ -1276,6 +1266,15 @@
                             <button class="quality-btn" type="button" data-quality="480p">480p</button>
                             <button class="quality-btn" type="button" data-quality="360p">360p</button>
                             <button class="quality-btn" type="button" data-quality="240p">240p</button>
+                        </div>
+
+                        <div class="subtitles-toggle" style="margin-top:0;margin-bottom:8px">
+                            <input type="checkbox" id="adaptiveQualityToggle" checked>
+                            <label for="adaptiveQualityToggle">Ajuster la qualité selon le débit (mode adaptatif)</label>
+                        </div>
+
+                        <div class="adaptive-banner" id="adaptiveBanner">
+                            Mode adaptatif actif : le téléchargement démarre en qualité maximale, le débit réel est mesuré pendant 10 secondes, puis la qualité descend automatiquement (8K → 4K → 1440p → 1080p → 720p…) si la vitesse est insuffisante.
                         </div>
 
                         <div class="language-selector">
@@ -1333,7 +1332,7 @@
                         </div>
 
                         <div class="subtitles-toggle">
-                            <input type="checkbox" id="writeSubtitlesToggle" checked>
+                            <input type="checkbox" id="writeSubtitlesToggle">
                             <label for="writeSubtitlesToggle">Télécharger les sous-titres si disponibles</label>
                         </div>
 
@@ -1352,9 +1351,6 @@
                     <section class="player-shell" id="playerShell">
                         <div class="video-board">
                             <video id="videoPlayer" controls playsinline preload="metadata"></video>
-                            <div class="subtitle-overlay" id="subtitleOverlay">
-                                <div class="subtitle-text hidden" id="subtitleText"></div>
-                            </div>
                         </div>
 
                         <div class="control-cluster">
@@ -1368,6 +1364,7 @@
                                 <button class="pill-toggle" type="button" id="loopToggle">Loop off</button>
                                 <button class="pill-toggle" type="button" id="playPauseToggle">Lire</button>
                                 <button class="pill-toggle" type="button" id="resetSpeed">x1</button>
+                                <button class="pill-toggle" type="button" id="subtitleToggle" style="display:none">CC off</button>
                             </div>
                         </div>
 
@@ -1479,10 +1476,6 @@ https://example.com/video..."
         const pickLocalFile = document.getElementById("pickLocalFile");
         const localVideoFile = document.getElementById("localVideoFile");
         const localFileName = document.getElementById("localFileName");
-        const pickSubtitleFile = document.getElementById("pickSubtitleFile");
-        const subtitleFile = document.getElementById("subtitleFile");
-        const subtitleFileName = document.getElementById("subtitleFileName");
-        const subtitleText = document.getElementById("subtitleText");
         const openBatchBtn = document.getElementById("openBatchBtn");
         const batchModal = document.getElementById("batchModal");
         const batchDialog = document.getElementById("batchDialog");
@@ -1508,6 +1501,9 @@ https://example.com/video..."
         const audioFormatSelector = document.getElementById("audioFormatSelector");
         const languageSelect = document.getElementById("languageSelect");
         const writeSubtitlesToggle = document.getElementById("writeSubtitlesToggle");
+        const adaptiveQualityToggle = document.getElementById("adaptiveQualityToggle");
+        const adaptiveBanner = document.getElementById("adaptiveBanner");
+        const subtitleToggle = document.getElementById("subtitleToggle");
 
         let currentType = "video";
         let currentQuality = "best";
@@ -1515,12 +1511,16 @@ https://example.com/video..."
         let currentAudioFormat = "mp3";
         let currentLanguage = "";
         let currentLocalObjectUrl = null;
-        let currentSubtitleEntries = [];
         let currentUrlOptionsProfile = null;
         let urlOptionsLoadedFor = "";
+        let subtitleTrackState = { tracks: [], activeIndex: -1 };
         const speedValues = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4, 8, 16];
 
-        // FFmpeg status check
+        adaptiveQualityToggle.addEventListener("change", () => {
+            updateAdaptiveQualityNote();
+        });
+
+        // FFmpeg status check (au chargement + focus fenetre, pas de spam)
         function checkFFmpeg() {
             fetch("/check-ffmpeg")
                 .then(res => res.json())
@@ -1537,6 +1537,158 @@ https://example.com/video..."
                     ffmpegDot.classList.remove("online");
                     ffmpegText.textContent = "Serveur: hors ligne";
                 });
+        }
+
+        function formatSpeed(bytesPerSec) {
+            if (!bytesPerSec || bytesPerSec <= 0) return "";
+            const mb = bytesPerSec / (1024 * 1024);
+            if (mb >= 1) return ` · ${mb.toFixed(1)} Mo/s`;
+            return ` · ${(bytesPerSec / 1024).toFixed(0)} Ko/s`;
+        }
+
+        function updateAdaptiveQualityNote() {
+            const isBestQuality = currentQuality === "best";
+            const adaptiveToggleWrap = adaptiveQualityToggle.closest(".subtitles-toggle");
+            if (adaptiveToggleWrap) {
+                adaptiveToggleWrap.style.display = (currentType === "video" && isBestQuality) ? "flex" : "none";
+            }
+
+            const isAdaptiveMode = currentType === "video" && isBestQuality && adaptiveQualityToggle.checked;
+            adaptiveBanner.classList.toggle("visible", Boolean(adaptiveBanner.dataset.show === "true" && isAdaptiveMode));
+            if (isAdaptiveMode && adaptiveBanner.dataset.show !== "true") {
+                adaptiveBanner.textContent = "Mode adaptatif actif : démarrage en qualité maximale, mesure du débit réel pendant 10 s, puis descente automatique (8K: 3min, 4K: 5min, 1440p: 10min, 1080p: 15min…) si l'ETA dépasse le seuil.";
+            }
+        }
+
+        function showAdaptiveChangeNote(result) {
+            const qualityUsed = result && (result.quality_used || result.quality || currentQuality || "best");
+            if (!qualityUsed || qualityUsed === "best") {
+                adaptiveBanner.dataset.show = "false";
+                adaptiveBanner.classList.remove("visible");
+                return;
+            }
+            const label = qualityUsed === "4320p" ? "8K" : qualityUsed === "2160p" ? "4K" : qualityUsed === "1440p" ? "1440p" : qualityUsed === "1080p" ? "1080p" : qualityUsed === "720p" ? "720p" : qualityUsed === "480p" ? "480p" : qualityUsed === "360p" ? "360p" : qualityUsed === "240p" ? "240p" : qualityUsed.toUpperCase();
+            adaptiveBanner.dataset.show = "true";
+            adaptiveBanner.textContent = (result && result.adaptive_note)
+                ? `Qualité ajustée après 10 s → ${result.adaptive_note}`
+                : `Qualité ajustée automatiquement : Auto max → ${label} pour garder le téléchargement compatible avec le débit actuel.`;
+            adaptiveBanner.classList.add("visible");
+        }
+
+        function sleep(ms) {
+            return new Promise((resolve) => setTimeout(resolve, ms));
+        }
+
+        async function pollJobUntilDone(jobId, onProgress) {
+            const maxMs = 60 * 60 * 1000;
+            const started = Date.now();
+            while (Date.now() - started < maxMs) {
+                const response = await fetch(`/jobs/${jobId}`);
+                const payload = await response.json();
+                if (!response.ok || !payload.success || !payload.job) {
+                    throw new Error((payload && payload.error) || "Suivi du job impossible");
+                }
+                const job = payload.job;
+                if (typeof onProgress === "function") {
+                    onProgress(job);
+                }
+                if (["success", "failed", "skipped"].includes(job.status)) {
+                    return job;
+                }
+                await sleep(500);
+            }
+            throw new Error("Telechargement trop long (timeout suivi)");
+        }
+
+        function buildSubtitleTracks(subtitleFiles) {
+            if (!Array.isArray(subtitleFiles)) {
+                return [];
+            }
+            return subtitleFiles.map((relative) => {
+                const name = String(relative).split("/").pop() || String(relative);
+                const match = name.match(/\.([A-Za-z-]{2,10})\.(vtt|srt|ass)$/i);
+                const lang = match ? match[1] : "";
+                return {
+                    url: `/media/${relative}`,
+                    lang: lang || "und",
+                    label: lang ? lang.toUpperCase() : "Sous-titres"
+                };
+            });
+        }
+
+        function jobResultToDownloadPayload(job) {
+            const result = job.result || {};
+            if (job.status === "skipped") {
+                return {
+                    success: true,
+                    skipped: true,
+                    reason: result.reason || job.message,
+                    message: result.message || job.message || "Saute",
+                    filename: result.filename,
+                    source_label: job.url,
+                };
+            }
+            if (job.status !== "success") {
+                throw new Error(job.error || job.message || result.error || "Echec du telechargement");
+            }
+            const filename = result.filename;
+            const relative = result.relative_path || filename;
+            const domain = (job.url || "").replace(/^https?:\/\/(www\.)?/, "").split("/")[0] || "remote";
+            const ext = (filename || "").split(".").pop()?.toLowerCase() || "";
+            const previewableExts = new Set(["mp4", "webm", "ogv", "mp3", "m4a", "aac", "ogg", "opus", "wav", "flac"]);
+            if (result.quality_changed) {
+                showAdaptiveChangeNote(result);
+            } else {
+                adaptiveBanner.dataset.show = "false";
+                adaptiveBanner.classList.remove("visible");
+            }
+            return {
+                success: true,
+                message: result.message || `Telecharge : ${filename}`,
+                filename,
+                file_url: relative ? `/media/${relative}` : null,
+                source_type: domain,
+                source_label: job.url,
+                previewable: previewableExts.has(ext),
+                storage_folder: result.folder,
+                subtitles: buildSubtitleTracks(result.subtitle_files),
+                adaptive_note: result.adaptive_note || "",
+            };
+        }
+
+        async function downloadOneUrl(url) {
+            const response = await fetch("/download-async", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    url: url,
+                    type: currentType,
+                    quality: currentQuality,
+                    video_format: currentVideoFormat,
+                    audio_format: currentAudioFormat,
+                    language: currentLanguage,
+                    write_subtitles: writeSubtitlesToggle.checked,
+                    adaptive_quality: adaptiveQualityToggle.checked
+                })
+            });
+            const start = await response.json();
+            if (!response.ok || !start.success) {
+                throw new Error(start.error || "Telechargement impossible");
+            }
+            if (!start.async) {
+                return start;
+            }
+            const job = await pollJobUntilDone(start.job_id, (j) => {
+                const pct = Math.max(0, Math.min(99, Number(j.progress) || 0));
+                const hasMeasuredProgress = pct > 0;
+                setProgress(pct, !hasMeasuredProgress && j.status === "running");
+                const speedTxt = formatSpeed(j.speed);
+                const progressText = hasMeasuredProgress
+                    ? `Telechargement ${pct.toFixed(0)}%${speedTxt}`
+                    : `Telechargement en cours${speedTxt}`;
+                updateStatus(progressText, "loading");
+            });
+            return jobResultToDownloadPayload(job);
         }
 
         function resetProgressUI() {
@@ -1809,27 +1961,6 @@ https://example.com/video..."
             }
         }
 
-        async function downloadOneUrl(url) {
-            const response = await fetch("/download", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    url: url,
-                    type: currentType,
-                    quality: currentQuality,
-                    video_format: currentVideoFormat,
-                    audio_format: currentAudioFormat,
-                    language: currentLanguage,
-                    write_subtitles: writeSubtitlesToggle.checked
-                })
-            });
-            const data = await response.json();
-            if (!response.ok || !data.success) {
-                throw new Error(data.error || "Telechargement impossible");
-            }
-            return data;
-        }
-
         async function runBatchDownload() {
             const urls = parseBatchUrls(batchUrls.value);
             if (urls.length === 0) {
@@ -1875,7 +2006,8 @@ https://example.com/video..."
                             data.file_url,
                             data.filename,
                             data.source_type === "local" ? "LOCAL" : "URL",
-                            data.source_label
+                            data.source_label,
+                            data.subtitles
                         );
                     }
                 } catch (error) {
@@ -1895,8 +2027,9 @@ https://example.com/video..."
         }
 
         // Progress bar
-        function setProgress(percent) {
-            progressFill.style.width = percent + "%";
+        function setProgress(percent, indeterminate = false) {
+            progressFill.classList.toggle("indeterminate", indeterminate);
+            progressFill.style.width = indeterminate ? "30%" : percent + "%";
         }
 
         function showProgress() {
@@ -1914,20 +2047,60 @@ https://example.com/video..."
             sourceValue.textContent = value || "Source en attente";
         }
 
+        // Sous-titres : injecte les pistes comme balises <track> du lecteur HTML5
+        function applySubtitleTracks(subtitles) {
+            Array.from(videoPlayer.querySelectorAll("track")).forEach(track => track.remove());
+            subtitleTrackState = { tracks: [], activeIndex: -1 };
+            subtitleToggle.classList.remove("active");
+            subtitleToggle.textContent = "CC off";
+
+            if (!Array.isArray(subtitles) || subtitles.length === 0) {
+                subtitleToggle.style.display = "none";
+                subtitleToggle.title = "";
+                return;
+            }
+
+            subtitles.forEach((sub) => {
+                const track = document.createElement("track");
+                track.kind = "subtitles";
+                track.label = sub.label || sub.lang || "Sous-titres";
+                track.srclang = sub.lang || "und";
+                track.src = sub.url;
+                track.default = false;
+                videoPlayer.appendChild(track);
+                subtitleTrackState.tracks.push(track);
+            });
+
+            subtitleToggle.style.display = "";
+            subtitleToggle.title = `${subtitles.length} piste(s) de sous-titres disponible(s)`;
+        }
+
+        // Bouton CC : cycle Off → piste 1 → piste 2 → … → Off
+        subtitleToggle.addEventListener("click", () => {
+            const tracks = Array.from(videoPlayer.textTracks).filter(t => t.kind === "subtitles" || t.kind === "captions");
+            if (!tracks.length) {
+                return;
+            }
+            subtitleTrackState.activeIndex += 1;
+            if (subtitleTrackState.activeIndex >= tracks.length) {
+                subtitleTrackState.activeIndex = -1;
+            }
+            tracks.forEach((track, index) => {
+                track.mode = (index === subtitleTrackState.activeIndex) ? "showing" : "disabled";
+            });
+            const isOn = subtitleTrackState.activeIndex >= 0;
+            subtitleToggle.classList.toggle("active", isOn);
+            subtitleToggle.textContent = isOn
+                ? `CC ${tracks[subtitleTrackState.activeIndex].label}`
+                : "CC off";
+        });
+
         function resetPlayerDisplay() {
             videoPlayer.pause();
+            applySubtitleTracks([]);
             videoPlayer.removeAttribute("src");
             videoPlayer.load();
             playerMeta.innerHTML = "";
-            subtitleText.textContent = "";
-            subtitleText.classList.add("hidden");
-        }
-
-        function clearSubtitles() {
-            currentSubtitleEntries = [];
-            subtitleText.textContent = "";
-            subtitleText.classList.add("hidden");
-            subtitleFileName.textContent = "Aucun fichier de sous-titres selectionne.";
         }
 
         function getResolutionLabel(width, height) {
@@ -1963,193 +2136,9 @@ https://example.com/video..."
                 <span>Duree: ${mins}:${secs.toString().padStart(2, "0")}</span>
                 <span>Resolution: ${resolution}</span>
                 <span>Qualite source: ${qualityLabel}</span>
+                ${subtitleTrackState.tracks.length ? `<span>Sous-titres: ${subtitleTrackState.tracks.length} piste(s) disponible(s)</span>` : ""}
                 ${shouldWarn ? '<span class="warning-chip">Cette source est inferieure a 1080p, le plein ecran peut paraitre flou</span>' : ""}
             `;
-        }
-
-        function assTimeToSeconds(value) {
-            const parts = value.trim().split(":");
-            if (parts.length !== 3) {
-                return NaN;
-            }
-
-            const hours = Number(parts[0]);
-            const minutes = Number(parts[1]);
-            const seconds = Number(parts[2].replace(",", "."));
-            return (hours * 3600) + (minutes * 60) + seconds;
-        }
-
-        function cleanAssText(value) {
-            return value
-                .replace(/\{[^}]*\}/g, "")
-                .replace(/\\N/gi, "\n")
-                .replace(/\\n/gi, "\n")
-                .replace(/\\h/gi, " ")
-                .trim();
-        }
-
-        function parseAss(content) {
-            const lines = content.split(/\r?\n/);
-            let inEvents = false;
-            let formatColumns = [];
-            const entries = [];
-
-            for (const rawLine of lines) {
-                const line = rawLine.trim();
-                if (!line) {
-                    continue;
-                }
-
-                if (line.startsWith("[Events]")) {
-                    inEvents = true;
-                    continue;
-                }
-
-                if (inEvents && line.startsWith("[")) {
-                    break;
-                }
-
-                if (!inEvents) {
-                    continue;
-                }
-
-                if (line.startsWith("Format:")) {
-                    formatColumns = line
-                        .slice("Format:".length)
-                        .split(",")
-                        .map(item => item.trim().toLowerCase());
-                    continue;
-                }
-
-                if (!line.startsWith("Dialogue:") || formatColumns.length === 0) {
-                    continue;
-                }
-
-                const payload = line.slice("Dialogue:".length).trim();
-                const values = [];
-                let current = "";
-
-                for (let i = 0; i < payload.length; i += 1) {
-                    const char = payload[i];
-                    if (char === "," && values.length < formatColumns.length - 1) {
-                        values.push(current);
-                        current = "";
-                    } else {
-                        current += char;
-                    }
-                }
-                values.push(current);
-
-                const row = {};
-                formatColumns.forEach((column, index) => {
-                    row[column] = (values[index] || "").trim();
-                });
-
-                const start = assTimeToSeconds(row.start || "");
-                const end = assTimeToSeconds(row.end || "");
-                const text = cleanAssText(row.text || "");
-
-                if (Number.isFinite(start) && Number.isFinite(end) && text) {
-                    entries.push({ start, end, text });
-                }
-            }
-
-            return entries;
-        }
-
-        function srtTimeToSeconds(value) {
-            const normalized = value.trim().replace(",", ".");
-            const parts = normalized.split(":");
-            if (parts.length !== 3) {
-                return NaN;
-            }
-
-            const hours = Number(parts[0]);
-            const minutes = Number(parts[1]);
-            const seconds = Number(parts[2]);
-            return (hours * 3600) + (minutes * 60) + seconds;
-        }
-
-        function parseSrt(content) {
-            const blocks = content
-                .replace(/\r/g, "")
-                .split("\n\n")
-                .map(block => block.trim())
-                .filter(Boolean);
-
-            const entries = [];
-
-            for (const block of blocks) {
-                const lines = block.split("\n");
-                const timingLine = lines.find(line => line.includes("-->"));
-                if (!timingLine) {
-                    continue;
-                }
-
-                const [startRaw, endRaw] = timingLine.split("-->").map(value => value.trim());
-                const textLines = lines.slice(lines.indexOf(timingLine) + 1).filter(Boolean);
-                const text = textLines.join("\n").trim();
-                const start = srtTimeToSeconds(startRaw);
-                const end = srtTimeToSeconds(endRaw);
-
-                if (Number.isFinite(start) && Number.isFinite(end) && text) {
-                    entries.push({ start, end, text });
-                }
-            }
-
-            return entries;
-        }
-
-        async function loadSubtitleFile(file) {
-            if (!file) {
-                clearSubtitles();
-                return;
-            }
-
-            try {
-                const content = await file.text();
-                const lowerName = file.name.toLowerCase();
-                const entries = lowerName.endsWith(".srt") ? parseSrt(content) : parseAss(content);
-
-                if (!entries.length) {
-                    currentSubtitleEntries = [];
-                    subtitleText.textContent = "";
-                    subtitleText.classList.add("hidden");
-                    subtitleFileName.textContent = "Sous-titres charges, mais aucun texte detecte.";
-                    updateStatus("Fichier de sous-titres invalide ou vide.", "error");
-                    return;
-                }
-
-                currentSubtitleEntries = entries;
-                subtitleFileName.textContent = `Sous-titres: ${file.name}`;
-                updateSubtitleForCurrentTime();
-                updateStatus(`Sous-titres charges: ${file.name}`, "success");
-            } catch (error) {
-                clearSubtitles();
-                updateStatus("Impossible de lire le fichier de sous-titres.", "error");
-            }
-        }
-
-        function updateSubtitleForCurrentTime() {
-            if (!currentSubtitleEntries.length) {
-                subtitleText.textContent = "";
-                subtitleText.classList.add("hidden");
-                return;
-            }
-
-            const currentTime = videoPlayer.currentTime || 0;
-            const activeEntry = currentSubtitleEntries.find(
-                entry => currentTime >= entry.start && currentTime <= entry.end
-            );
-
-            if (!activeEntry) {
-                subtitleText.textContent = "";
-                subtitleText.classList.add("hidden");
-                return;
-            }
-
-            subtitleText.textContent = activeEntry.text;
-            subtitleText.classList.remove("hidden");
         }
 
         // Type selector
@@ -2170,6 +2159,7 @@ https://example.com/video..."
                     audioFormatSelector.classList.add("visible");
                     qualitySelector.classList.remove("visible");
                 }
+                updateAdaptiveQualityNote();
             });
         });
 
@@ -2194,8 +2184,11 @@ https://example.com/video..."
                 qualityButtons.forEach(b => b.classList.remove("active"));
                 btn.classList.add("active");
                 currentQuality = btn.dataset.quality;
+                updateAdaptiveQualityNote();
             });
         });
+
+        updateAdaptiveQualityNote();
 
         // Speed board
         function buildSpeedBoard() {
@@ -2248,15 +2241,8 @@ https://example.com/video..."
 
         videoPlayer.addEventListener("play", () => playPauseToggle.textContent = "Pause");
         videoPlayer.addEventListener("pause", () => playPauseToggle.textContent = "Lire");
-        videoPlayer.addEventListener("timeupdate", updateSubtitleForCurrentTime);
-        videoPlayer.addEventListener("seeked", updateSubtitleForCurrentTime);
-        videoPlayer.addEventListener("ratechange", updateSubtitleForCurrentTime);
         videoPlayer.addEventListener("error", () => {
             updateStatus("Lecture impossible pour ce media ou format non supporte.", "error");
-        });
-        videoPlayer.addEventListener("ended", () => {
-            subtitleText.textContent = "";
-            subtitleText.classList.add("hidden");
         });
 
         videoPlayer.addEventListener("loadedmetadata", renderPlayerMeta);
@@ -2274,9 +2260,10 @@ https://example.com/video..."
         }
 
         // Load video
-        function loadVideo(url, filename, sourceType, sourceLabel) {
+        function loadVideo(url, filename, sourceType, sourceLabel, subtitles) {
             placePlayerInStage();
             videoPlayer.pause();
+            applySubtitleTracks(subtitles || []);
             const mediaUrl = url.startsWith("blob:") ? url : url + "?t=" + Date.now();
             videoPlayer.muted = false;
             videoPlayer.volume = 1;
@@ -2288,7 +2275,11 @@ https://example.com/video..."
             loopToggle.classList.remove("active");
             loopToggle.textContent = "Loop off";
             updateSourceCard(sourceType, sourceLabel || filename);
-            updateStatus("Video prete: " + filename, "success");
+            const subCount = Array.isArray(subtitles) ? subtitles.length : 0;
+            updateStatus(
+                "Video prete: " + filename + (subCount ? ` (${subCount} piste(s) de sous-titres)` : ""),
+                "success"
+            );
         }
 
         function loadLocalFileDirectly() {
@@ -2313,7 +2304,6 @@ https://example.com/video..."
         }
 
         pickLocalFile.addEventListener("click", () => localVideoFile.click());
-        pickSubtitleFile.addEventListener("click", () => subtitleFile.click());
         openBatchBtn.addEventListener("click", () => setBatchModalVisible(true));
         closeBatchBtn.addEventListener("click", () => setBatchModalVisible(false));
         importBatchFileBtn.addEventListener("click", () => batchFileInput.click());
@@ -2376,16 +2366,6 @@ https://example.com/video..."
         localVideoFile.addEventListener("change", () => {
             const file = localVideoFile.files[0];
             if (file) {
-                const lowerName = file.name.toLowerCase();
-                if (lowerName.endsWith(".ass") || lowerName.endsWith(".srt")) {
-                    localVideoFile.value = "";
-                    localFileName.textContent = "Aucune video locale selectionnee.";
-                    subtitleFileName.textContent = `Sous-titres: ${file.name}`;
-                    loadSubtitleFile(file);
-                    updateSourceCard("SUBTITLE", file.name);
-                    return;
-                }
-
                 localFileName.textContent = "Fichier local: " + file.name;
                 updateSourceCard("LOCAL", file.name);
                 input.value = "";
@@ -2394,15 +2374,6 @@ https://example.com/video..."
             } else {
                 localFileName.textContent = "Aucune video locale selectionnee.";
             }
-        });
-
-        subtitleFile.addEventListener("change", async () => {
-            const file = subtitleFile.files[0];
-            if (!file) {
-                clearSubtitles();
-                return;
-            }
-            await loadSubtitleFile(file);
         });
 
         input.addEventListener("input", () => {
@@ -2431,43 +2402,27 @@ https://example.com/video..."
 
             downloadBtn.disabled = true;
             showProgress();
+            setProgress(0);
             updateStatus("Telechargement en cours...", "loading");
             statusMessage.classList.add("loading-pulse");
-
-            // Simulate progress
-            let progress = 0;
-            const progressInterval = setInterval(() => {
-                progress += Math.random() * 15;
-                if (progress > 90) progress = 90;
-                setProgress(progress);
-            }, 500);
 
             try {
                 let data;
 
                 if (hasLocalFile) {
                     data = loadLocalFileDirectly();
+                    setProgress(100);
                 } else {
-                    const response = await fetch("/download", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({
-                            url: url,
-                            type: currentType,
-                            quality: currentQuality,
-                            video_format: currentVideoFormat,
-                            audio_format: currentAudioFormat,
-                            language: currentLanguage,
-                            write_subtitles: writeSubtitlesToggle.checked
-                        })
-                    });
-                    data = await response.json();
+                    data = await downloadOneUrl(url);
+                    setProgress(100);
                 }
 
-                clearInterval(progressInterval);
-                setProgress(100);
-
                 if (data.success) {
+                    if (data.skipped) {
+                        updateStatus(data.message || "Saute", "success");
+                        resetProgressUI();
+                        return;
+                    }
                     const successMessage = data.message || (hasLocalFile ? "Video locale prete: " + data.filename : "Telecharge: " + data.filename);
                     updateStatus(successMessage, "success");
 
@@ -2477,7 +2432,8 @@ https://example.com/video..."
                                 data.file_url,
                                 data.filename,
                                 data.source_type === "local" ? "LOCAL" : "URL",
-                                data.source_label
+                                data.source_label,
+                                data.subtitles
                             );
                         }, 120);
                     } else if (!hasLocalFile && data.previewable === false) {
@@ -2488,7 +2444,6 @@ https://example.com/video..."
                     updateStatus("Erreur: " + data.error, "error");
                 }
             } catch (error) {
-                clearInterval(progressInterval);
                 resetPlayerDisplay();
                 updateStatus("Erreur: " + error.message, "error");
             }
@@ -2499,7 +2454,10 @@ https://example.com/video..."
         // Init
         buildSpeedBoard();
         checkFFmpeg();
-        setInterval(checkFFmpeg, 60000);
+        document.addEventListener("visibilitychange", () => {
+            if (document.visibilityState === "visible") checkFFmpeg();
+        });
+        window.addEventListener("focus", checkFFmpeg);
     </script>
 </body>
 </html>

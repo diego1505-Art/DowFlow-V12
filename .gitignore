@@ -31,6 +31,14 @@ downloads/*
 
 # Browser profiles
 browser_profile/
+youtube_profile/
+youtube_cookies.txt
 
 # Logs
 *.log
+logs/
+
+# SQLite runtime
+dowflow.db
+*.db-wal
+*.db-shm

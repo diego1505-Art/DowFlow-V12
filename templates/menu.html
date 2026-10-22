@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DowFlow - Menu</title>
+    <style>
+        :root {
+            --surface: rgba(255, 255, 255, 0.08);
+            --accent: #c96034;
+            --accent-dark: #8f3f1d;
+            --line: rgba(255, 255, 255, 0.12);
+            --radius-xl: 32px;
+            --radius-lg: 22px;
+            --radius-md: 16px;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            min-height: 100vh;
+            font-family: "Segoe UI", "Helvetica Neue", sans-serif;
+            color: #fff;
+            background: #000;
+            overflow-x: hidden;
+        }
+
+        .bg-video-container { position: fixed; inset: 0; z-index: -1; overflow: hidden; }
+        .bg-video-container video { width: 100%; height: 100%; object-fit: cover; filter: brightness(0.35) saturate(1.2); opacity: 0.8; }
+        .bg-overlay { position: absolute; inset: 0; background: radial-gradient(circle at center, transparent 0%, rgba(0,0,0,0.55) 100%); }
+
+        .page { position: relative; z-index: 1; width: min(1120px, calc(100% - 32px)); margin: 40px auto; }
+
+        .shell {
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 40px;
+            background: rgba(255, 255, 255, 0.08);
+            box-shadow: 0 40px 100px rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(40px) saturate(1.8);
+            -webkit-backdrop-filter: blur(40px) saturate(1.8);
+        }
+
+        .topbar {
+            display: flex; align-items: center; justify-content: space-between; gap: 20px;
+            padding: 24px 34px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(0, 0, 0, 0.2);
+        }
+
+        .brand { display: flex; align-items: center; gap: 14px; }
+        .brand-mark {
+            display: grid; place-items: center; width: 44px; height: 44px; border-radius: 14px;
+            background: linear-gradient(135deg, #ff0000 0%, #cc0000 100%);
+            font-size: 1.1rem; font-weight: 700; box-shadow: 0 8px 20px rgba(255, 0, 0, 0.3);
+        }
+        .brand-copy h1 { font-size: 1.2rem; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; }
+        .brand-copy p { color: rgba(255, 255, 255, 0.65); font-size: 0.86rem; }
+
+        .ffmpeg-status {
+            display: flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 999px;
+            background: rgba(255, 255, 255, 0.1); font-size: 0.85rem; color: rgba(255, 255, 255, 0.75);
+        }
+        .ffmpeg-status .dot { width: 8px; height: 8px; border-radius: 50%; background: #d96a63; }
+        .ffmpeg-status .dot.online { background: #2f9a63; }
+
+        .hero { padding: 46px 34px 20px; }
+        .eyebrow {
+            display: inline-flex; align-items: center; gap: 8px;
+            padding: 8px 16px; border-radius: 999px;
+            background: rgba(201, 96, 52, 0.18); border: 1px solid rgba(201, 96, 52, 0.4);
+            color: #ffb894; font-size: 0.8rem; letter-spacing: 0.12em; text-transform: uppercase;
+        }
+        .hero h2 { margin-top: 18px; font-size: clamp(1.9rem, 4vw, 2.9rem); font-weight: 800; line-height: 1.1; }
+        .hero p.lead { margin-top: 14px; max-width: 640px; color: rgba(255, 255, 255, 0.7); line-height: 1.6; }
+
+        .grid {
+            display: grid; gap: 20px;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            padding: 28px 34px 42px;
+        }
+
+        .card {
+            position: relative; display: flex; flex-direction: column; gap: 14px;
+            padding: 26px 24px; min-height: 200px;
+            border-radius: var(--radius-lg);
+            border: 1px solid var(--line);
+            background: rgba(255, 255, 255, 0.06);
+            text-decoration: none; color: inherit;
+            transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+        }
+        .card.available:hover { transform: translateY(-4px); border-color: rgba(201, 96, 52, 0.6); background: rgba(201, 96, 52, 0.12); }
+        .card.disabled { cursor: pointer; opacity: 0.82; }
+        .card.disabled:hover { transform: translateY(-2px); border-color: rgba(255, 255, 255, 0.24); }
+
+        .card-icon {
+            display: grid; place-items: center; width: 56px; height: 56px; border-radius: 18px;
+            font-size: 1.6rem; background: rgba(0, 0, 0, 0.32); border: 1px solid var(--line);
+        }
+        .card h3 { font-size: 1.18rem; font-weight: 700; }
+        .card p { color: rgba(255, 255, 255, 0.66); font-size: 0.9rem; line-height: 1.5; flex: 1; }
+
+        .badge {
+            align-self: flex-start; padding: 6px 12px; border-radius: 999px; font-size: 0.72rem;
+            letter-spacing: 0.08em; text-transform: uppercase; font-weight: 700;
+        }
+        .badge.on { background: rgba(47, 154, 99, 0.22); color: #7fe0ac; border: 1px solid rgba(47, 154, 99, 0.5); }
+        .badge.soon { background: rgba(255, 255, 255, 0.1); color: rgba(255, 255, 255, 0.6); border: 1px solid var(--line); }
+
+        .footer {
+            display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+            padding: 22px 34px; border-top: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(0, 0, 0, 0.2); color: rgba(255, 255, 255, 0.55); font-size: 0.84rem;
+        }
+        .footer a { color: inherit; opacity: 0.8; }
+    </style>
+</head>
+<body>
+    <div class="bg-video-container">
+        <video autoplay muted loop playsinline poster="https://images.unsplash.com/photo-1451187580459-43490279c0fa?q=80&w=2072&auto=format&fit=crop">
+            <source src="https://assets.mixkit.co/videos/preview/mixkit-stars-in-the-night-sky-background-9937-large.mp4" type="video/mp4">
+        </video>
+        <div class="bg-overlay"></div>
+    </div>
+
+    <main class="page">
+        <section class="shell">
+            <header class="topbar">
+                <div class="brand">
+                    <div class="brand-mark">▼</div>
+                    <div class="brand-copy">
+                        <h1>DowFlow</h1>
+                        <p>Universal Media Experience</p>
+                    </div>
+                </div>
+                <div class="ffmpeg-status">
+                    <span class="dot" id="ffmpegDot"></span>
+                    <span id="ffmpegText">FFmpeg : vérification...</span>
+                </div>
+            </header>
+
+            <section class="hero">
+                <div class="eyebrow">Choisis ton type de téléchargement</div>
+                <h2>Que veux-tu récupérer aujourd'hui ?</h2>
+                <p class="lead">
+                    Sélectionne une catégorie pour ouvrir l'espace de téléchargement correspondant.
+                    Chaque espace a ses propres options, qualité et lecteur intégré.
+                </p>
+            </section>
+
+            <section class="grid">
+                <a class="card available" href="/video">
+                    <div class="card-icon">🎬</div>
+                    <h3>Vidéo</h3>
+                    <p>Colle une URL (YouTube, Twitch, TikTok, Instagram, Vimeo…) et télécharge la vidéo ou l'audio, puis lis-la directement.</p>
+                    <span class="badge on">Disponible</span>
+                </a>
+
+                <a class="card available" href="/music">
+                    <div class="card-icon">🎵</div>
+                    <h3>Musique</h3>
+                    <p>Cherche n'importe quel morceau, parcours les titres populaires, télécharge en MP3/FLAC avec la pochette d'album.</p>
+                    <span class="badge on">Disponible</span>
+                </a>
+
+                <a class="card disabled" href="/film">
+                    <div class="card-icon">🍿</div>
+                    <h3>Film / Série</h3>
+                    <p>Films et séries complets : pistes audio multiples, sous-titres et gestion des saisons.</p>
+                    <span class="badge soon">Bientôt</span>
+                </a>
+
+                <a class="card disabled" href="/anime">
+                    <div class="card-icon">🌸</div>
+                    <h3>Anime / Dessin animé</h3>
+                    <p>Animes et dessins animés, VF/VOSTFR, catalogues de diffusion en continu.</p>
+                    <span class="badge soon">Bientôt</span>
+                </a>
+
+                <a class="card disabled" href="/image">
+                    <div class="card-icon">📖</div>
+                    <h3>Manhwa / Manga / BD / Image</h3>
+                    <p>Chapitres, planches et images : manhwa, manga et bandes dessinées.</p>
+                    <span class="badge soon">Bientôt</span>
+                </a>
+            </section>
+
+            <footer class="footer">
+                <span>DowFlow — Universal Media Experience</span>
+                <span>Propulsé par yt-dlp · <a href="https://github.com/yt-dlp/yt-dlp/blob/master/supportedsites.md" target="_blank" rel="noopener">Sites supportés</a></span>
+            </footer>
+        </section>
+    </main>
+
+    <script>
+        fetch("/check-ffmpeg")
+            .then((r) => r.json())
+            .then((data) => {
+                const dot = document.getElementById("ffmpegDot");
+                const text = document.getElementById("ffmpegText");
+                if (data.has_ffmpeg) {
+                    dot.classList.add("online");
+                    text.textContent = "FFmpeg : prêt";
+                } else {
+                    text.textContent = "FFmpeg : absent";
+                }
+            })
+            .catch(() => {
+                document.getElementById("ffmpegText").textContent = "FFmpeg : inconnu";
+            });
+    </script>
+</body>
+</html>

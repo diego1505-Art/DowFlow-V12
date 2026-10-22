@@ -10,7 +10,7 @@ from urllib.parse import parse_qs, parse_qsl, urlencode, urlparse, urlunparse
 import requests
 
 from .base import ExpandResult, OptionDef, SiteProfile
-from config import LANGUAGES, get_language_label, normalize_language
+from config import LANGUAGES, normalize_language
 
 FRANIME_HOSTS = {"franime.fr"}
 CATALOG_URL = "https://api.franime.fr/api/animes/"

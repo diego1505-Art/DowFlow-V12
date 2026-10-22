@@ -15,6 +15,10 @@ from typing import Any
 from urllib.parse import urlparse
 
 from config import BROWSER_HEADLESS
+from logger import get_logger
+from utils import _resolve_ffmpeg_dir, find_chrome_binary, yt_dlp_runtime_options
+
+log = get_logger("browser_ext")
 
 # ── Patterns de flux vidéo ───────────────────────────────────────────────────
 STREAM_PATTERNS = [
@@ -77,50 +81,48 @@ def _validate_stream(url: str) -> bool:
     """
     Vérifie rapidement qu'une URL est accessible avant de lancer yt-dlp dessus.
     Évite de passer un embed ou une URL non-finale au téléchargeur.
+    Consomme correctement les réponses HTTP pour éviter les fuites.
     """
+    import urllib.request
+    parsed = urlparse(url)
+    referer = f"{parsed.scheme}://{parsed.netloc}/"
+    base_headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "Referer": referer,
+    }
+
+    # Tentative 1 : HEAD (plus rapide, mais souvent bloqué par CDN)
     try:
-        import urllib.request
-        headers = {
-            "User-Agent": "Mozilla/5.0",
-            "Referer": f"{urlparse(url).scheme}://{urlparse(url).netloc}/",
-        }
-
-        req = urllib.request.Request(url, method="HEAD", headers=headers)
-        resp = urllib.request.urlopen(req, timeout=8)
-        return getattr(resp, "status", 200) < 400
-    except Exception:
-        try:
-            import urllib.request
-
-            headers = {
-                "User-Agent": "Mozilla/5.0",
-                "Referer": f"{urlparse(url).scheme}://{urlparse(url).netloc}/",
-                "Range": "bytes=0-0",
-            }
-            req = urllib.request.Request(url, method="GET", headers=headers)
-            resp = urllib.request.urlopen(req, timeout=8)
+        req = urllib.request.Request(url, method="HEAD", headers=base_headers)
+        with urllib.request.urlopen(req, timeout=8) as resp:
             return getattr(resp, "status", 200) < 400
-        except Exception:
-            return False
+    except Exception:
+        pass
+
+    # Tentative 2 : GET avec Range bytes=0-0 (plus fiable), on lit/ferme proprement
+    try:
+        headers = dict(base_headers)
+        headers["Range"] = "bytes=0-0"
+        req = urllib.request.Request(url, method="GET", headers=headers)
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            try:
+                resp.read()  # Consomme le corps (1 octet) pour éviter fuite
+            except Exception:
+                pass
+            code = getattr(resp, "status", 200)
+            # 206 = Partial Content (OK), 2xx/3xx = OK
+            return code < 400
+    except Exception:
+        return False
 
 
 def _find_chrome() -> str | None:
-    import platform
-    if platform.system() == "Windows":
-        for base in ["PROGRAMFILES", "PROGRAMFILES(X86)", "LOCALAPPDATA"]:
-            p = os.path.join(os.environ.get(base, ""), "Google", "Chrome", "Application", "chrome.exe")
-            if os.path.isfile(p): return p
-    elif platform.system() == "Darwin":
-        p = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-        if os.path.isfile(p): return p
-    else:
-        for cmd in ("google-chrome", "google-chrome-stable", "chromium-browser", "chromium"):
-            f = shutil.which(cmd)
-            if f: return f
-    return None
+    path = find_chrome_binary()
+    return str(path) if path else None
 
 
 def _chrome_user_data_dir() -> str | None:
+    """Retourne le PROFIL UTILISATEUR RÉEL de Chrome (pour copier cookies), PAS le profil DowFlow."""
     import platform
     if platform.system() == "Windows":
         return os.path.join(os.environ.get("LOCALAPPDATA", ""), "Google", "Chrome", "User Data")
@@ -173,7 +175,7 @@ def extract_streams(page_url: str, wait_seconds: int = 30) -> list[str]:
         url = req.url
         if _skip(url) or url in found: return
         if _is_stream(url):
-            print(f"  [browser] ✓ {url[:110]}")
+            log.debug("[browser] stream request : %s", url[:110])
             found.append(url)
 
     def on_response(resp):
@@ -181,7 +183,7 @@ def extract_streams(page_url: str, wait_seconds: int = 30) -> list[str]:
         if _skip(url) or url.startswith("blob:") or url in found: return
         ct = resp.headers.get("content-type", "").lower()
         if any(t in ct for t in MEDIA_CONTENT_TYPES):
-            print(f"  [browser] ✓ (ct) {url[:100]}")
+            log.debug("[browser] stream response (ct=%s): %s", ct, url[:100])
             found.append(url)
 
     chrome = _find_chrome()
@@ -272,31 +274,25 @@ def extract_streams(page_url: str, wait_seconds: int = 30) -> list[str]:
 def _best_stream(streams: list[str]) -> str | None:
     """Valide chaque stream dans l'ordre et retourne le premier accessible."""
     for url in streams:
-        print(f"  [browser] Validation : {url[:90]}")
+        log.info("[browser] Validation : %s", url[:90])
         if _validate_stream(url):
-            print(f"  [browser] ✓ Choisi : {url[:90]}")
+            log.success("[browser] Choisi : %s", url[:90])
             return url
-        print(f"  [browser] ✗ Inaccessible, suivant...")
+        log.warning("[browser] Inaccessible, suivant...")
     return None
 
 
-def _resolve_ffmpeg_dir() -> str | None:
-    if shutil.which("ffmpeg") and shutil.which("ffprobe"): return None
-    p = Path(os.environ.get("LOCALAPPDATA", "")) / "Microsoft" / "WinGet" / "Packages" / \
-        "Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe" / "ffmpeg-8.1.1-full_build" / "bin"
-    return str(p) if (p / "ffmpeg.exe").exists() else None
+def _resolve_ffmpeg_dir_proxy() -> str | None:
+    return _resolve_ffmpeg_dir()
 
 
 def _build_video_format(quality: str) -> str:
-    quality_map = {
-        "best": "bestvideo+bestaudio/best",
-        "ultra": "bestvideo[height<=2160]+bestaudio/best[height<=2160]/best",
-        "qhd": "bestvideo[height<=1440]+bestaudio/best[height<=1440]/best",
-        "high": "bestvideo[height<=1080]+bestaudio/best[height<=1080]/best",
-        "medium": "bestvideo[height<=720]+bestaudio/best[height<=720]/best",
-        "low": "bestvideo[height<=480]+bestaudio/best[height<=480]/best",
-    }
-    return quality_map.get(quality, quality_map["best"])
+    """Version unifiée : accepte les qualités legacy ET les nouvelles 1080p/720p..."""
+    from playlist import _LEGACY_QUALITY_MAP, _build_video_format_string
+    normalized = _LEGACY_QUALITY_MAP.get(quality.lower(), quality)
+    ffmpeg_dir = _resolve_ffmpeg_dir_proxy()
+    has_ffmpeg = bool(ffmpeg_dir) or (bool(shutil.which("ffmpeg")) and bool(shutil.which("ffprobe")))
+    return _build_video_format_string(normalized, "mp4", has_ffmpeg)
 
 
 def download_with_browser(url: str, output_path: str = "downloads",
@@ -307,7 +303,7 @@ def download_with_browser(url: str, output_path: str = "downloads",
     import yt_dlp
 
     os.makedirs(output_path, exist_ok=True)
-    print(f"  [browser] Extraction depuis : {url}")
+    log.info("[browser] Extraction depuis : %s", url)
 
     streams = extract_streams(url)
     if not streams:
@@ -315,38 +311,49 @@ def download_with_browser(url: str, output_path: str = "downloads",
 
     stream_url = _best_stream(streams)
     if not stream_url:
-        raise ValueError(f"Streams trouvés mais inaccessibles : {streams[:3]}")
+        domain = urlparse(url).netloc.lower()
+        if "instagram.com" in domain or "tiktok.com" in domain:
+            raise ValueError(
+                f"Accès restreint sur {domain}. Tu dois être connecté à ton compte dans Chrome "
+                "pour que DowFlow puisse récupérer ce contenu protégé."
+            )
+        raise ValueError(f"Streams trouvés mais inaccessibles (blob) : {streams[:3]}")
 
     parsed  = urlparse(url)
     referer = f"{parsed.scheme}://{parsed.netloc}/"
     slug    = re.sub(r"[^\w\-]", "-", parsed.path.strip("/").replace("/", "-"))[:60] or "video"
 
-    ffmpeg_dir = _resolve_ffmpeg_dir()
+    ffmpeg_dir = _resolve_ffmpeg_dir_proxy()
     has_ffmpeg = bool(ffmpeg_dir) or (bool(shutil.which("ffmpeg")) and bool(shutil.which("ffprobe")))
+    aria2c_path = shutil.which("aria2c")
 
-    ydl_opts: dict[str, Any] = {
-        "format":   _build_video_format(quality) if download_type != "audio" else "bestaudio/best",
-        "outtmpl":  os.path.join(output_path, f"{slug}.%(ext)s"),
-        "quiet":    False,
-        "noplaylist": True,
-        "concurrent_fragment_downloads": 16,
-        "retries":  10,
-        "fragment_retries": 10,
-        "http_chunk_size": 10 * 1024 * 1024,
-        "http_headers": {
-            "Referer":    referer,
-            "Origin":     referer.rstrip("/"),
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        },
-    }
-    if ffmpeg_dir: ydl_opts["ffmpeg_location"] = ffmpeg_dir
-    if has_ffmpeg and download_type != "audio": ydl_opts["merge_output_format"] = "mp4"
-    if shutil.which("aria2c"):
-        ydl_opts["external_downloader"] = "aria2c"
-        ydl_opts["external_downloader_args"] = [
-            "--max-connection-per-server=16", "--split=16",
-            "--min-split-size=1M", "--continue=true",
-        ]
+    def build_opts(force_native: bool = False) -> dict[str, Any]:
+        opts: dict[str, Any] = {
+            "format":   _build_video_format(quality) if download_type != "audio" else "bestaudio/best",
+            "outtmpl":  os.path.join(output_path, f"{slug}.%(ext)s"),
+            "quiet":    False,
+            "noplaylist": True,
+            "concurrent_fragment_downloads": 1 if force_native else 16,
+            "retries":  10,
+            "fragment_retries": 10,
+            "http_chunk_size": 10 * 1024 * 1024,
+            "http_headers": {
+                "Referer":    referer,
+                "Origin":     referer.rstrip("/"),
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            },
+        }
+        opts.update(yt_dlp_runtime_options())
+        if ffmpeg_dir: opts["ffmpeg_location"] = ffmpeg_dir
+        if has_ffmpeg and download_type != "audio": opts["merge_output_format"] = "mp4"
+
+        if aria2c_path and not force_native:
+            opts["external_downloader"] = "aria2c"
+            opts["external_downloader_args"] = [
+                "--max-connection-per-server=16", "--split=16",
+                "--min-split-size=1M", "--continue=true",
+            ]
+        return opts
 
     # Snapshot des fichiers avant pour détecter le nouveau fichier créé
     before_mtime: dict[str, float] = {
@@ -354,8 +361,21 @@ def download_with_browser(url: str, output_path: str = "downloads",
         for f in os.listdir(output_path)
     }
 
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        info = ydl.extract_info(stream_url, download=True)
+    force_native = False
+    while True:
+        current_opts = build_opts(force_native=force_native)
+        try:
+            with yt_dlp.YoutubeDL(current_opts) as ydl:
+                ydl.extract_info(stream_url, download=True)
+            break
+        except Exception as e:
+            if not force_native and aria2c_path:
+                msg = str(e).lower()
+                if any(k in msg for k in ("403", "forbidden", "429", "inaccessible")):
+                    log.warning("[browser-fallback] Blocage Turbo -> passage en mode Natif discret")
+                    force_native = True
+                    continue
+            raise
 
     # Sélection fiable : fichier nouveau OU modifié, trié par mtime décroissant
     candidates = []
@@ -369,6 +389,12 @@ def download_with_browser(url: str, output_path: str = "downloads",
 
     candidates.sort(reverse=True)
     selected = candidates[0][1] if candidates else None
+
+    if not selected:
+        raise FileNotFoundError(
+            f"Téléchargement terminé mais fichier introuvable dans {output_path}. "
+            "Vérifiez les droits d'écriture et l'antivirus."
+        )
 
     return {
         "title":      slug,

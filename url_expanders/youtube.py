@@ -5,6 +5,7 @@ from typing import Any
 from urllib.parse import parse_qs, urlparse
 
 from .base import ExpandResult, OptionDef, SiteProfile
+from utils import yt_dlp_runtime_options
 
 YOUTUBE_HOSTS = {"youtube.com", "m.youtube.com", "youtu.be", "music.youtube.com"}
 
@@ -79,27 +80,16 @@ def expand(url: str, options: dict[str, Any]) -> ExpandResult:
     has_list = "list" in query or "/playlist" in parsed.path
     is_channel = any(p in parsed.path for p in ("/channel/", "/@", "/c/", "/user/"))
 
-    if not expand_playlist and not expand_channel:
+    # ── Cas "rien à étendre" : retourner simplement l'URL telle quelle
+    #    au lieu d'une erreur 400. Améliore énormément l'UX.
+    has_real_work = (expand_playlist and has_list) or (expand_channel and is_channel)
+    if not has_real_work:
         return ExpandResult(
-            success=False,
+            success=True,
             site_id="youtube",
-            error="Active au moins une option (playlist ou chaîne) dans Options.",
-        )
-
-    if expand_channel and not is_channel and not has_list:
-        # Channel toggle without channel URL → ignore unless playlist
-        if not expand_playlist or not has_list:
-            return ExpandResult(
-                success=False,
-                site_id="youtube",
-                error="Cette URL n'est pas une chaîne YouTube.",
-            )
-
-    if expand_playlist and not has_list and not (expand_channel and is_channel):
-        return ExpandResult(
-            success=False,
-            site_id="youtube",
-            error="Pas de playlist détectée (paramètre list= absent).",
+            urls=[url],
+            count=1,
+            title="URL YouTube unique (pas de playlist / chaîne détectée)",
         )
 
     try:
@@ -114,6 +104,7 @@ def expand(url: str, options: dict[str, Any]) -> ExpandResult:
         "skip_download": True,
         "playlistend": max_items,
     }
+    ydl_opts.update(yt_dlp_runtime_options())
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:

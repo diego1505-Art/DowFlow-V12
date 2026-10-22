@@ -1,177 +1,81 @@
-# DowFlow
+# 🚀 DowFlow - Universal Media Experience
 
-DowFlow est une application locale Flask pour télécharger et regarder des médias depuis des URLs compatibles avec `yt-dlp`, lire des fichiers locaux, gérer des sous-titres, et lancer plusieurs téléchargements depuis une liste d'URLs.
+DowFlow est un téléchargeur et lecteur multimédia universel, ultra-rapide et intelligent, conçu pour Windows. Il transforme l'expérience de téléchargement en une solution "clés en main" capable de gérer plus de 1000 sites (YouTube, Instagram, TikTok, Twitter, Twitch, etc.) avec une gestion dynamique de la qualité, de la musique et des sessions.
 
-L'interface principale est disponible sur :
+---
 
-```text
-http://127.0.0.1:5001
-```
+## 🌟 Points Forts
 
-## Fonctionnalités
+- **📱 Menu Multi-Catégories** : Un hub central pour choisir votre type de média : Vidéo, Musique, Film/Série, Anime, ou Manga/Images.
+- **🎵 Espace Musique Dédié** :
+    - **Recherche YouTube intégrée** : Trouvez n'importe quel morceau sans quitter l'application.
+    - **Pochettes HD (Deezer)** : Récupération automatique des pochettes d'album via l'API Deezer (repli sur YouTube).
+    - **Bibliothèque Locale** : Gérez vos morceaux téléchargés, écoutez-les avec le lecteur intégré et profitez de l'**Auto-Play** (lecture continue).
+    - **Gestion Intelligente** : Bouton de suppression directe et effet "Marquee" pour les titres longs.
+- **⚡ Turbo Mode (x16)** : Utilise `aria2c` avec 16 connexions simultanées pour saturer votre bande passante.
+- **📊 Qualité Adaptative Dynamique** : Surveillance du débit réel pendant 10 secondes et rétrogradation automatique si nécessaire pour garantir un téléchargement fluide.
+- **🎬 Lecteur Intelligent & Sous-titres** :
+    - **Passe Unique** : Vidéo, Audio et Sous-titres récupérés ensemble.
+    - **Format VTT** : Conversion automatique pour une compatibilité web parfaite.
+    - **Bouton CC** : Contrôle des sous-titres à la volée.
+- **📂 Organisation Automatique** : Médias triés par domaine ou par type (ex: `downloads/music/`, `downloads/youtube/`).
+- **🍪 Gestion de Session Adaptative** : Utilise vos cookies Chrome ou `youtube_cookies.txt` pour contourner les bot-checks.
 
-- Téléchargement vidéo ou audio via `yt-dlp`.
-- Choix de qualité vidéo : auto max, 2160p, 1440p, 1080p, 720p, 480p.
-- Fusion audio/vidéo avec FFmpeg quand disponible.
-- Accélération des téléchargements avec `aria2c` quand disponible.
-- Lecture directe dans la page pour les formats compatibles navigateur.
-- Lecture de fichiers locaux sans copie quand un chemin local est saisi.
-- Sélection de fichiers locaux depuis l'interface.
-- Support de sous-titres `.ass` et `.srt` côté lecteur.
-- Téléchargement de plusieurs URLs depuis une fenêtre dédiée.
-- Import d'un fichier `.txt`, `.list` ou `.csv` dans la liste d'URLs.
-- Rangement automatique dans des sous-dossiers de `downloads`.
-- Badge d'état FFmpeg dans l'interface.
+---
 
-## Structure Du Projet
+## 🛠️ Installation Windows
 
-```text
-app.py                  Serveur Flask et routes HTTP
-playlist.py             Orchestration du téléchargement yt-dlp
-browser_extractor.py    Fallback navigateur Playwright générique
-franime_extractor.py    Extracteur spécialisé existant dans le projet
-config.py               Constantes partagées
-utils.py                Helpers communs, dont FFmpeg et URLs HTTP
-templates/dowload.html  Interface web complète
-start.bat               Lancement Windows avec vérifications runtime
-requirements.txt        Dépendances Python
-extract_urls_from_txt.py Extraction d'URLs depuis un texte/JSON
-url_collector.py        Script expérimental de collecte
-downloads/              Dossier de sortie des médias
-```
-
-## Installation
-
-Sur Windows, le plus simple est d'utiliser :
+La méthode la plus simple est d'utiliser le lanceur automatisé :
 
 ```powershell
 .\start.bat
 ```
 
-Le script :
+Ce script s'occupe de tout : environnement virtuel, dépendances, Playwright (Chromium), aria2c et FFmpeg.
 
-- crée le virtualenv si nécessaire ;
-- installe les dépendances Python ;
-- vérifie Chromium pour Playwright ;
-- vérifie `aria2c` ;
-- ajoute FFmpeg au `PATH` de la session si l'installation Winget est trouvée ;
-- lance le serveur sur `http://127.0.0.1:5001`.
+**Interface accessible sur :** `http://127.0.0.1:5001`
 
-Installation manuelle :
+---
 
+## 🎵 Focus Musique
+
+L'espace Musique (`/music`) permet de :
+1. **Chercher** : Résultats instantanés depuis YouTube.
+2. **Télécharger** : Choix du format (MP3 192/320, FLAC, WAV...) avec inclusion automatique des métadonnées et pochettes.
+3. **Écouter** : Votre bibliothèque locale est scannée en temps réel.
+4. **Dataset (Futur)** : Support prévu pour le dataset MusicBrainz/Spotify/Tidal/Deezer (~34 Go de métadonnées) pour une recherche offline ultra-complète.
+
+---
+
+## 🗂️ Architecture du Projet
+
+- **[app.py](file:///c:/Users/diego/Documents/download-video-youtube-V9-main/app.py)** : Serveur Flask, routes API et gestion des jobs.
+- **[playlist.py](file:///c:/Users/diego/Documents/download-video-youtube-V9-main/playlist.py)** : Cœur logique des téléchargements vidéo.
+- **[music.py](file:///c:/Users/diego/Documents/download-video-youtube-V9-main/music.py)** : Service dédié à la recherche et à la gestion musicale.
+- **[music_dataset.py](file:///c:/Users/diego/Documents/download-video-youtube-V9-main/music_dataset.py)** : Interface pour le catalogue musical local.
+- **[templates/](file:///c:/Users/diego/Documents/download-video-youtube-V9-main/templates)** : 
+    - `menu.html` : Accueil DowFlow.
+    - `dowload.html` : Espace Vidéo universel.
+    - `music.html` : Espace Musique complet.
+- **[test_music.py](file:///c:/Users/diego/Documents/download-video-youtube-V9-main/test_music.py)** : Tests spécifiques au workflow musical.
+
+---
+
+## 🛡️ OPSEC & Fiabilité
+
+- **Nettoyage Automatique** : Suppression des fichiers `.part`, `.aria2` et `.ytdl` après chaque job.
+- **Signatures & Hashs** : Respect des signatures de fichiers pour éviter les détections antivirus inutiles.
+- **Logs Success** : Suivi précis des téléchargements réussis dans la console et la base SQLite.
+
+---
+
+## 📝 Diagnostics
+
+En cas de problème, utilisez le centre de diagnostic interactif :
 ```powershell
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-python -m playwright install chromium
-python app.py
+.\debug.bat
 ```
-
-## Dépendances
-
-Python :
-
-```text
-Flask
-yt-dlp
-playwright
-requests
-```
-
-Outils externes recommandés :
-
-- `ffmpeg` et `ffprobe` pour fusionner proprement vidéo + audio et convertir l'audio.
-- `aria2c` pour accélérer les téléchargements fragmentés.
-- Chromium Playwright pour les fonctions qui nécessitent un navigateur.
-
-## Utilisation
-
-### Télécharger Une URL
-
-1. Colle une URL dans le champ principal.
-2. Choisis `Audio` ou `Video`.
-3. Choisis la qualité si tu télécharges une vidéo.
-4. Clique sur `Telecharger`.
-
-Si le fichier téléchargé est prévisualisable par le navigateur, il s'affiche dans le lecteur intégré.
-
-### Lire Un Fichier Local
-
-Deux méthodes sont possibles :
-
-- clique sur `Choisir une video locale` ;
-- ou colle un chemin local dans le champ principal.
-
-Quand un chemin local est utilisé, le fichier est servi directement par l'application sans être recopié dans `downloads`.
-
-### Ajouter Des Sous-Titres
-
-Clique sur `Choisir un .ass ou .srt`, puis sélectionne ton fichier de sous-titres.
-
-Le rendu `.ass` est interprété côté navigateur. Les timings et le texte sont pris en charge, mais les styles avancés ASS ne sont pas reproduits parfaitement.
-
-### Télécharger Plusieurs URLs
-
-1. Clique sur `URLs multiples`.
-2. Colle une URL par ligne, ou importe un fichier `.txt`.
-3. Clique sur `Telecharger la liste`.
-
-La liste est traitée séquentiellement. Une erreur sur une URL n'arrête pas toute la série.
-
-### Trouver Des Épisodes
-
-La fenêtre `URLs multiples` contient aussi un bouton `Trouver episodes`.
-
-Cette fonction prend la première URL de la liste, tente de trouver les saisons/épisodes disponibles, puis remplit la zone avec les URLs générées. C'est une fonction expérimentale : elle dépend de la structure de la page distante et peut échouer si le site change son HTML, son API ou bloque la requête.
-
-## Rangement Des Téléchargements
-
-Les fichiers sont enregistrés dans `downloads`.
-
-Le rangement est automatique :
-
-- YouTube va dans `downloads/youtube`.
-- Les autres sources vont dans un dossier dérivé du domaine, du chemin, de l'ID éventuel et de la saison éventuelle.
-
-Exemple :
-
-```text
-downloads/youtube/
-downloads/example-com-serie-id-123-s-1/
-```
-
-## CLI
-
-Le projet garde aussi un mode console :
-
+Ou lancez les tests unitaires :
 ```powershell
-python playlist.py
+python -m unittest discover -v
 ```
-
-Ce mode permet un téléchargement simple sans passer par l'interface web.
-
-## Scripts Utilitaires
-
-Extraire des URLs depuis un fichier texte ou JSON :
-
-```powershell
-python extract_urls_from_txt.py fichier.txt --output urls_extraites.txt
-```
-
-`url_collector.py` est un script expérimental. Il n'est pas nécessaire au fonctionnement principal de DowFlow.
-
-## Limites Connues
-
-- Le fichier [templates/dowload.html](templates/dowload.html) contient HTML, CSS et JavaScript dans un seul fichier. Il est fonctionnel, mais volumineux.
-- Les fonctions basées sur Playwright peuvent être lentes au premier lancement.
-- Les formats `.mkv`, `.avi`, `.mov` peuvent être acceptés localement, mais ne sont pas toujours lisibles par le lecteur HTML5.
-- Une vidéo locale basse résolution restera floue en plein écran : l'application ne peut pas recréer des détails qui n'existent pas dans le fichier.
-- Les sites tiers peuvent changer leur structure ou bloquer certaines requêtes, ce qui peut casser les fonctions expérimentales.
-
-## Vérification Rapide
-
-```powershell
-python -c "import app, playlist, browser_extractor, franime_extractor, config, utils; print('ok')"
-```
-
-Si la commande affiche `ok`, les imports principaux fonctionnent.

@@ -8,8 +8,10 @@ from pathlib import Path
 from typing import Any
 
 from config import BROWSER_HEADLESS, BROWSER_PROFILE_DIR, PROXIES
+from logger import get_logger
+from utils import _resolve_ffmpeg_dir, find_chrome_binary, yt_dlp_runtime_options
 
-FRANIME_PATTERN = re.compile(r"https?://(?:www\.)?franime\.fr/", re.IGNORECASE)
+log = get_logger("franime_ext")
 
 # ── Anti-Bot Settings ────────────────────────────────────────────────────────
 USER_AGENTS = [
@@ -54,10 +56,6 @@ SKIP_HOSTS = {
 
 # Priorité de téléchargement (yt-dlp supporte tous ces domaines)
 LECTEUR_PRIORITY = ["HLS", "SIBNET", "SENDVID", "VIDMOLY", "FILEMOON", "WATCH2"]
-
-
-def is_franime_url(url: str) -> bool:
-    return bool(FRANIME_PATTERN.match(url))
 
 
 def _skip(url: str) -> bool:
@@ -134,9 +132,9 @@ def clear_terminal():
         os.system("cls")
     else:
         os.system("clear")
-    print("\n" + "=" * 60)
-    print("DowFlow — Console rafraîchie pour éviter la latence")
-    print("=" * 60 + "\n")
+    from logger import banner
+    banner(log, "DowFlow — Console rafraîchie pour éviter la latence")
+
 
 def extract_stream_url(page_url: str, preferred_lecteur: str | None = None, proxy_url: str | None = None) -> tuple[str | None, str | None, dict[str, list[str]], dict[str, Any]]:
     """
@@ -158,11 +156,11 @@ def extract_stream_url(page_url: str, preferred_lecteur: str | None = None, prox
     }
 
     if proxy_url:
-        print(f"  [franime] Utilisation du proxy : {proxy_url.split('@')[-1]}")
+        log.info("  [franime] Utilisation du proxy : %s", proxy_url.split("@")[-1])
 
     def _remember(name: str, url: str) -> None:
         if url not in captured[name]:
-            print(f"  [franime] ✓ [{name}] {url[:110]}")
+            log.success('  [franime] ✓ [%s] %s', name, url[:110])
             captured[name].append(url)
 
     def on_request(req):
@@ -191,7 +189,7 @@ def extract_stream_url(page_url: str, preferred_lecteur: str | None = None, prox
             url_status[url] = resp.status
             _remember(hls_name, url)
         if not any(e in url for e in [".js",".css",".png",".jpg",".svg",".woff",".ico",".gif",".webp",".wasm"]):
-            print(f"  [franime]   {resp.status}  {url[:100]}")
+            log.info('  [franime]   %s  %s', resp.status, url[:100])
 
     chrome_path   = _find_chrome()
     user_data_dir = _chrome_user_data_dir()
@@ -200,8 +198,8 @@ def extract_stream_url(page_url: str, preferred_lecteur: str | None = None, prox
     BROWSER_PROFILE_DIR.mkdir(parents=True, exist_ok=True)
     profile_path = str(BROWSER_PROFILE_DIR)
 
-    print(f"  [franime] Chrome : {chrome_path or 'Chromium Playwright'}")
-    print(f"  [franime] Profil : {profile_path}")
+    log.info('  [franime] Chrome : %s', chrome_path or 'Chromium Playwright')
+    log.info('  [franime] Profil : %s', profile_path)
 
     with sync_playwright() as pw:
         # Arguments pour plus de discrétion (anti-bot)
@@ -227,7 +225,7 @@ def extract_stream_url(page_url: str, preferred_lecteur: str | None = None, prox
 
         # Si Chrome est installé, on essaie de synchroniser les cookies initiaux une fois
         if chrome_path and user_data_dir and not (BROWSER_PROFILE_DIR / "Default").exists():
-            print("  [franime] Synchronisation initiale du profil Chrome...")
+            log.info('  [franime] Synchronisation initiale du profil Chrome...')
             src_default = os.path.join(user_data_dir, "Default")
             dst_default = BROWSER_PROFILE_DIR / "Default"
             dst_default.mkdir(parents=True, exist_ok=True)
@@ -270,12 +268,12 @@ def extract_stream_url(page_url: str, preferred_lecteur: str | None = None, prox
         try:
             page.goto(page_url, wait_until="domcontentloaded", timeout=45_000)
         except PwTimeout:
-            print("  [franime] Timeout – on continue")
+            log.warning('  [franime] Timeout – on continue')
 
         # Détection Cloudflare
         content_lower = page.content().lower()
         if "challenge-platform" in content_lower or "cloudflare" in content_lower or "just a moment" in page.title().lower():
-            print("  [franime] Challenge Cloudflare détecté, attente de résolution (jusqu'à 45s)...")
+            log.info("  [franime] Challenge Cloudflare détecté, attente de résolution (jusqu'à 45s)...")
             human_delay(4000, 6000)
             try:
                 # On essaie de cliquer sur la checkbox si elle apparaît (iframe Cloudflare)
@@ -304,15 +302,15 @@ def extract_stream_url(page_url: str, preferred_lecteur: str | None = None, prox
                                         page.mouse.move(box['x'] + box['width']/2, box['y'] + box['height']/2, steps=10)
                                         human_delay(200, 500)
                                     checkbox.click()
-                                    print(f"  [franime] ✓ Tentative de clic Cloudflare ({i+1})")
+                                    log.success("  [franime] ✓ Tentative de clic Cloudflare (%s)", i + 1)
                             except: pass
                     human_delay(2000, 3500)
 
                 # On attend le bouton final (on gère les traductions possibles)
                 page.wait_for_selector("button:has-text('Regarder'), button:has-text('Watch'), .player-container", timeout=35_000)
-                print("  [franime] ✓ Page accessible !")
+                log.success('  [franime] ✓ Page accessible !')
             except Exception as e:
-                print(f"  [franime] ⚠ Le challenge semble toujours présent ou erreur : {e}")
+                log.error('  [franime] ⚠ Le challenge semble toujours présent ou erreur : %s', e)
                 page.wait_for_timeout(2_000)
 
         # Si un lecteur préféré est demandé, le sélectionner dans le dropdown
@@ -331,7 +329,7 @@ def extract_stream_url(page_url: str, preferred_lecteur: str | None = None, prox
                 el = page.query_selector(sel)
                 if el and el.is_visible():
                     el.click(timeout=3_000)
-                    print(f"  [franime] Clic 'Regarder' : {sel}")
+                    log.info("  [franime] Clic 'Regarder' : %s", sel)
                     page.wait_for_timeout(2_000)
                     break
             except Exception:
@@ -373,7 +371,7 @@ def extract_stream_url(page_url: str, preferred_lecteur: str | None = None, prox
         )
         if captured.get("WATCH2") and (sendvid_broken or not healthy_players):
             watch2_url = captured["WATCH2"][0]
-            print(f"  [franime] Sendvid HS / pas de flux direct → ouverture Watch2...")
+            log.error('  [franime] Sendvid HS / pas de flux direct → ouverture Watch2...')
             try:
                 page.goto(watch2_url, wait_until="domcontentloaded", timeout=45_000)
                 for sel in ["video", "iframe", "source"]:
@@ -410,7 +408,7 @@ def extract_stream_url(page_url: str, preferred_lecteur: str | None = None, prox
                     except Exception:
                         pass
             except Exception as e:
-                print(f"  [franime] ⚠ Watch2 non exploitable : {e}")
+                log.warning('  [franime] ⚠ Watch2 non exploitable : %s', e)
 
         ctx.close()
 
@@ -423,7 +421,7 @@ def extract_stream_url(page_url: str, preferred_lecteur: str | None = None, prox
         if pick:
             status = url_status.get(pick)
             status_txt = f" (HTTP {status})" if status is not None else ""
-            print(f"  [franime] Lecteur choisi : {name} → {pick[:100]}{status_txt}")
+            log.success('  [franime] Lecteur choisi : %s → %s%s', name, pick[:100], status_txt)
             return pick, name, captured, diagnostics
 
     return None, None, captured, diagnostics
@@ -442,11 +440,11 @@ def _select_lecteur(page, lecteur_name: str):
                 opt = page.query_selector(f"option:has-text('{lecteur_name}'), li:has-text('{lecteur_name}')")
                 if opt:
                     opt.click(timeout=2_000)
-                    print(f"  [franime] Lecteur sélectionné : {lecteur_name}")
+                    log.success('  [franime] Lecteur sélectionné : %s', lecteur_name)
                     page.wait_for_timeout(1_500)
                     return
     except Exception as e:
-        print(f"  [franime] Impossible de changer de lecteur : {e}")
+        log.error('  [franime] Impossible de changer de lecteur : %s', e)
 
 
 # Compteur global pour le rafraîchissement de la console
@@ -467,7 +465,7 @@ def download_franime(url: str, output_path: str = "downloads",
         DOWNLOAD_COUNTER = 0
 
     # --- ANTI-SPAM DELAY ---
-    print(f"  [franime] Pause de sécurité anti-spam...")
+    log.info('  [franime] Pause de sécurité anti-spam...')
     human_delay(3000, 8000)
 
     # Direct d'abord : les proxies publics timeout souvent et font perdre plusieurs minutes.
@@ -483,7 +481,7 @@ def download_franime(url: str, output_path: str = "downloads",
     
     for proxy in proxies_to_try:
         try:
-            print(f"\n  [franime] Analyse de la page (Proxy: {proxy or 'Direct'}) : {url}")
+            log.info("\n  [franime] Analyse de la page (Proxy: %s) : %s", proxy or "Direct", url)
             stream_url, nom, all_captured, diagnostics = extract_stream_url(url, proxy_url=proxy)
             url_status = diagnostics.get("url_status") or {}
             
@@ -491,11 +489,14 @@ def download_franime(url: str, output_path: str = "downloads",
                 break # On a trouvé un flux !
                 
             if diagnostics.get("blocked") and diagnostics.get("main_status") in {401, 429}:
-                print(f"  [franime] ⚠ Proxy bloqué ou erreur fatale ({diagnostics.get('main_status')}). Suivant...")
+                log.error(
+                    "  [franime] ⚠ Proxy bloqué ou erreur fatale (%s). Suivant...",
+                    diagnostics.get("main_status"),
+                )
                 continue
                 
         except Exception as e:
-            print(f"  [franime] ✗ Erreur avec le proxy {proxy} : {e}")
+            log.error('  [franime] ✗ Erreur avec le proxy %s : %s', proxy, e)
             continue
 
     if not stream_url and not all_captured:
@@ -514,13 +515,18 @@ def download_franime(url: str, output_path: str = "downloads",
         # Ne pas tenter un embed déjà vu en 4xx/5xx pendant la capture
         status = url_status.get(s_url)
         if status is not None and status >= 400 and s_name != "WATCH2":
-            print(f"  [franime] Skip [{s_name}] HTTP {status} : {s_url[:100]}")
+            log.warning('  [franime] Skip [%s] HTTP %s : %s', s_name, status, s_url[:100])
             tried_urls.add(s_url)
             return None
         tried_urls.add(s_url)
         
         for proxy in proxies_to_try:
-            print(f"  [franime] Tentative [{s_name}] (Proxy: {proxy or 'Direct'}) : {s_url[:100]}...")
+            log.info(
+                "  [franime] Tentative [%s] (Proxy: %s) : %s...",
+                s_name,
+                proxy or "Direct",
+                s_url[:100],
+            )
             try:
                 res = _download_stream(s_url, s_name, url, output_path, download_type, quality,
                                        video_format=video_format, audio_format=audio_format,
@@ -528,7 +534,7 @@ def download_franime(url: str, output_path: str = "downloads",
                 if res.get("filename"):
                     return res
             except Exception as e:
-                print(f"  [franime] ✗ Échec proxy {proxy} : {e}")
+                log.error('  [franime] ✗ Échec proxy %s : %s', proxy, e)
                 continue
         return None
 
@@ -548,13 +554,13 @@ def download_franime(url: str, output_path: str = "downloads",
         if all_captured.get(lecteur):
             continue
         
-        print(f"\n  [franime] Forçage du lecteur : {lecteur}")
+        log.info('\\n  [franime] Forçage du lecteur : %s', lecteur)
         try:
             stream_url, nom, captured_now, diagnostics_now = extract_stream_url(url, preferred_lecteur=lecteur)
             url_status.update(diagnostics_now.get("url_status") or {})
             if diagnostics_now.get("blocked") and not stream_url and diagnostics_now.get("main_status") != 403:
                 status = diagnostics_now.get("main_status")
-                print(f"  [franime] ⚠ Bloqué ({status}).")
+                log.error("  [franime] ⚠ Bloqué (%s).", status)
                 continue
             if stream_url:
                 result = try_download(stream_url, nom)
@@ -565,9 +571,9 @@ def download_franime(url: str, output_path: str = "downloads",
                     result = try_download(s_url, name)
                     if result: return result
         except Exception as e:
-            print(f"  [franime] Erreur lors du forçage {lecteur} : {e}")
+            log.error('  [franime] Erreur lors du forçage %s : %s', lecteur, e)
 
-    print(f"  [franime] ⚠ Aucun lecteur n'a fonctionné pour {url}")
+    log.warning("  [franime] ⚠ Aucun lecteur n'a fonctionné pour %s", url)
     return {
         "success": False,
         "filename": None,
@@ -618,13 +624,13 @@ def _download_stream(stream_url: str, lecteur_name: str, page_url: str,
             "Origin":     referer.rstrip("/"),
             "User-Agent": random.choice(USER_AGENTS),
         },
-        "impersonate": "chrome",
     }
 
     # ── Formats et post-traitements via playlist helpers ────────────────────
     try:
         from playlist import (
             _build_video_format_string,
+            _build_video_format_sort,
             _build_audio_format_string,
             _build_audio_postprocessor,
             _build_subtitle_lang_options,
@@ -634,8 +640,9 @@ def _download_stream(stream_url: str, lecteur_name: str, page_url: str,
     except Exception:
         _build_video_format_string = None  # type: ignore
 
-    ffmpeg_dir = _resolve_ffmpeg_dir()
+    ffmpeg_dir = _resolve_ffmpeg_dir_proxy()
     has_ffmpeg = bool(ffmpeg_dir) or (bool(shutil.which("ffmpeg")) and bool(shutil.which("ffprobe")))
+    ydl_opts.update(yt_dlp_runtime_options())
     if ffmpeg_dir:
         ydl_opts["ffmpeg_location"] = ffmpeg_dir
 
@@ -656,6 +663,9 @@ def _download_stream(stream_url: str, lecteur_name: str, page_url: str,
     else:
         if _build_video_format_string is not None:
             ydl_opts["format"] = _build_video_format_string(quality, video_format, has_ffmpeg)
+            quality_sort = _build_video_format_sort(quality)
+            if quality_sort:
+                ydl_opts["format_sort"] = quality_sort
             f_meta = VIDEO_OUTPUT_FORMATS.get(video_format, VIDEO_OUTPUT_FORMATS["best"])
             container = f_meta["container"]
             if has_ffmpeg and container and f_meta["merge"]:
@@ -685,10 +695,7 @@ def _download_stream(stream_url: str, lecteur_name: str, page_url: str,
             "--min-split-size=1M",
             "--continue=true",
         ]
-        print("  [aria2c] Téléchargeur rapide activé pour Franime")
-
-    if ffmpeg_dir:
-        ydl_opts["ffmpeg_location"] = ffmpeg_dir
+        log.success('  [aria2c] Téléchargeur rapide activé pour Franime')
 
     # Tentative de téléchargement
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -698,7 +705,7 @@ def _download_stream(stream_url: str, lecteur_name: str, page_url: str,
             
             if filepath and os.path.isfile(filepath):
                 # --- AUTO-RÉPARATION ---
-                print(f"  [franime] Vérification de l'intégrité : {os.path.basename(filepath)}")
+                log.info("  [franime] Vérification de l'intégrité : %s", os.path.basename(filepath))
                 
                 # 1. Vérifier si c'est une vraie vidéo lisible
                 probe_cmd = [ffprobe_exe, "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", filepath]
@@ -713,7 +720,10 @@ def _download_stream(stream_url: str, lecteur_name: str, page_url: str,
                     pass
 
                 if not is_valid:
-                    print(f"  [franime] ⚠ Vidéo corrompue ou illisible ({os.path.basename(filepath)}). Tentative de réparation...")
+                    log.error(
+                        "  [franime] ⚠ Vidéo corrompue ou illisible (%s). Tentative de réparation...",
+                        os.path.basename(filepath),
+                    )
                     fixed_path = filepath.replace(".mp4", "_fixed.mp4")
                     # Tentative de remuxage pour réparer le container
                     fix_cmd = [ffmpeg_exe, "-y", "-i", filepath, "-c", "copy", "-map", "0:v", "-map", "0:a?", fixed_path]
@@ -722,10 +732,10 @@ def _download_stream(stream_url: str, lecteur_name: str, page_url: str,
                     if fix_res.returncode == 0 and os.path.exists(fixed_path) and os.path.getsize(fixed_path) > 1000000:
                         os.remove(filepath)
                         os.rename(fixed_path, filepath)
-                        print(f"  [franime] ✓ Réparation réussie.")
+                        log.success('  [franime] ✓ Réparation réussie.')
                     else:
                         if os.path.exists(fixed_path): os.remove(fixed_path)
-                        print(f"  [franime] ✗ Réparation échouée. Suppression pour retenter.")
+                        log.error('  [franime] ✗ Réparation échouée. Suppression pour retenter.')
                         os.remove(filepath)
                         raise Exception("Vidéo corrompue et non réparable.")
 
@@ -736,7 +746,7 @@ def _download_stream(stream_url: str, lecteur_name: str, page_url: str,
                     "folder": os.path.basename(output_path)
                 }
         except Exception as e:
-            print(f"  [franime] Erreur téléchargement/réparation : {e}")
+            log.error('  [franime] Erreur téléchargement/réparation : %s', e)
             if 'filepath' in locals() and filepath and os.path.exists(filepath):
                 os.remove(filepath)
             raise e
@@ -745,21 +755,12 @@ def _download_stream(stream_url: str, lecteur_name: str, page_url: str,
 
 
 def _find_chrome() -> str | None:
-    import platform
-    if platform.system() == "Windows":
-        for base in ["PROGRAMFILES", "PROGRAMFILES(X86)", "LOCALAPPDATA"]:
-            p = os.path.join(os.environ.get(base, ""), "Google", "Chrome", "Application", "chrome.exe")
-            if os.path.isfile(p): return p
-    elif platform.system() == "Darwin":
-        p = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-        if os.path.isfile(p): return p
-    else:
-        for cmd in ("google-chrome", "google-chrome-stable", "chromium-browser", "chromium"):
-            f = shutil.which(cmd); 
-            if f: return f
-    return None
+    path = find_chrome_binary()
+    return str(path) if path else None
+
 
 def _chrome_user_data_dir() -> str | None:
+    """Retourne le PROFIL UTILISATEUR RÉEL de Chrome (pour copier cookies), PAS le profil DowFlow."""
     import platform
     if platform.system() == "Windows":
         return os.path.join(os.environ.get("LOCALAPPDATA", ""), "Google", "Chrome", "User Data")
@@ -767,8 +768,6 @@ def _chrome_user_data_dir() -> str | None:
         return os.path.expanduser("~/Library/Application Support/Google/Chrome")
     return os.path.expanduser("~/.config/google-chrome")
 
-def _resolve_ffmpeg_dir() -> str | None:
-    if shutil.which("ffmpeg") and shutil.which("ffprobe"): return None
-    p = Path(os.environ.get("LOCALAPPDATA", "")) / "Microsoft" / "WinGet" / "Packages" / \
-        "Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe" / "ffmpeg-8.1.1-full_build" / "bin"
-    return str(p) if (p / "ffmpeg.exe").exists() else None
+
+def _resolve_ffmpeg_dir_proxy() -> str | None:
+    return _resolve_ffmpeg_dir()

@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DowFlow - Musique</title>
+    <style>
+        :root {
+            --accent: #c96034;
+            --accent-dark: #8f3f1d;
+            --line: rgba(255, 255, 255, 0.12);
+            --radius-lg: 22px;
+            --radius-md: 16px;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            min-height: 100vh;
+            font-family: "Segoe UI", "Helvetica Neue", sans-serif;
+            color: #fff; background: #000; overflow-x: hidden;
+        }
+
+        .bg-video-container { position: fixed; inset: 0; z-index: -1; overflow: hidden; }
+        .bg-video-container video { width: 100%; height: 100%; object-fit: cover; filter: brightness(0.3) saturate(1.15); opacity: 0.8; }
+        .bg-overlay { position: absolute; inset: 0; background: radial-gradient(circle at center, transparent 0%, rgba(0,0,0,0.6) 100%); }
+
+        .page { position: relative; z-index: 1; width: min(1180px, calc(100% - 32px)); margin: 40px auto; }
+
+        .shell {
+            overflow: hidden; border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 40px;
+            background: rgba(255, 255, 255, 0.08); box-shadow: 0 40px 100px rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(40px) saturate(1.8); -webkit-backdrop-filter: blur(40px) saturate(1.8);
+        }
+
+        .topbar {
+            display: flex; align-items: center; justify-content: space-between; gap: 20px;
+            padding: 24px 34px; border-bottom: 1px solid rgba(255, 255, 255, 0.1); background: rgba(0, 0, 0, 0.2);
+        }
+        .brand { display: flex; align-items: center; gap: 14px; }
+        .brand-mark {
+            display: grid; place-items: center; width: 44px; height: 44px; border-radius: 14px;
+            background: linear-gradient(135deg, #c96034 0%, #8f3f1d 100%); font-size: 1.2rem;
+            box-shadow: 0 8px 20px rgba(201, 96, 52, 0.35);
+        }
+        .brand-copy h1 { font-size: 1.2rem; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; }
+        .brand-copy p { color: rgba(255, 255, 255, 0.65); font-size: 0.86rem; }
+
+        .topbar-right { display: flex; align-items: center; gap: 12px; }
+        .back-link {
+            padding: 9px 16px; border-radius: 999px; text-decoration: none; font-size: 0.86rem; font-weight: 600;
+            color: rgba(255, 255, 255, 0.85); background: rgba(255, 255, 255, 0.1); border: 1px solid var(--line);
+        }
+        .back-link:hover { background: rgba(255, 255, 255, 0.18); }
+        .ffmpeg-status {
+            display: flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 999px;
+            background: rgba(255, 255, 255, 0.1); font-size: 0.85rem; color: rgba(255, 255, 255, 0.75);
+        }
+        .ffmpeg-status .dot { width: 8px; height: 8px; border-radius: 50%; background: #d96a63; }
+        .ffmpeg-status .dot.online { background: #2f9a63; }
+
+        .hero { padding: 40px 34px 10px; }
+        .eyebrow {
+            display: inline-flex; padding: 8px 16px; border-radius: 999px;
+            background: rgba(201, 96, 52, 0.18); border: 1px solid rgba(201, 96, 52, 0.4);
+            color: #ffb894; font-size: 0.78rem; letter-spacing: 0.12em; text-transform: uppercase;
+        }
+        .hero h2 { margin-top: 16px; font-size: clamp(1.7rem, 3.6vw, 2.5rem); font-weight: 800; }
+        .hero p.lead { margin-top: 12px; color: rgba(255, 255, 255, 0.68); max-width: 680px; line-height: 1.6; }
+
+        .search-panel { margin: 26px 34px 0; padding: 22px; border-radius: var(--radius-lg); border: 1px solid var(--line); background: rgba(0, 0, 0, 0.25); }
+        .search-row { display: flex; gap: 12px; flex-wrap: wrap; }
+        .search-row input {
+            flex: 1; min-width: 220px; padding: 15px 18px; border-radius: 14px; font-size: 1rem;
+            color: #fff; background: rgba(255, 255, 255, 0.08); border: 1px solid var(--line); outline: none;
+        }
+        .search-row input::placeholder { color: rgba(255, 255, 255, 0.45); }
+        .search-row input:focus { border-color: rgba(201, 96, 52, 0.7); }
+
+        .btn {
+            padding: 15px 24px; border-radius: 14px; border: 1px solid var(--line); font-size: 0.95rem; font-weight: 700;
+            cursor: pointer; color: #fff; background: rgba(255, 255, 255, 0.1); transition: filter 0.15s ease, background 0.15s ease;
+        }
+        .btn:hover { background: rgba(255, 255, 255, 0.18); }
+        .btn-primary { background: linear-gradient(135deg, var(--accent), var(--accent-dark)); border-color: transparent; box-shadow: 0 10px 26px rgba(201, 96, 52, 0.35); }
+        .btn-primary:hover { filter: brightness(1.08); }
+        .btn:disabled { opacity: 0.55; cursor: not-allowed; }
+
+        .options-row { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; margin-top: 16px; }
+        .options-row label { font-size: 0.86rem; color: rgba(255, 255, 255, 0.7); }
+        select.format-select {
+            padding: 10px 14px; border-radius: 12px; color: #fff; background: rgba(0, 0, 0, 0.45);
+            border: 1px solid var(--line); font-size: 0.9rem; outline: none;
+        }
+        select.format-select option { background: #1b1b1b; }
+        .toggle { display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; }
+        .toggle input { width: 16px; height: 16px; accent-color: var(--accent); }
+
+        .progress-wrap { margin-top: 18px; display: none; }
+        .progress-wrap.visible { display: block; }
+        .progress-bar { height: 8px; border-radius: 999px; background: rgba(255, 255, 255, 0.12); overflow: hidden; }
+        .progress-bar-fill { height: 100%; width: 0%; border-radius: 999px; background: linear-gradient(90deg, var(--accent), #ff9b6a); transition: width 0.3s ease; }
+        .status { margin-top: 10px; font-size: 0.88rem; color: rgba(255, 255, 255, 0.72); }
+        .status.error { color: #ff9d94; }
+        .status.success { color: #7fe0ac; }
+
+        .section { padding: 34px 34px 0; }
+        .section:last-of-type { padding-bottom: 42px; }
+        .section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 18px; }
+        .section-head h3 { font-size: 1.2rem; font-weight: 700; }
+        .section-head span { font-size: 0.82rem; color: rgba(255, 255, 255, 0.5); }
+
+        .track-list { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); }
+
+        .track {
+            display: flex; align-items: center; gap: 14px; padding: 12px; border-radius: var(--radius-md);
+            border: 1px solid var(--line); background: rgba(255, 255, 255, 0.05);
+            transition: border-color 0.15s ease, background 0.15s ease;
+        }
+        .track:hover { border-color: rgba(201, 96, 52, 0.5); background: rgba(201, 96, 52, 0.08); }
+        .track .cover {
+            width: 58px; height: 58px; flex: none; border-radius: 12px; object-fit: cover;
+            background: rgba(0, 0, 0, 0.4); display: grid; place-items: center; font-size: 1.4rem;
+        }
+        .track .meta { flex: 1; min-width: 0; }
+        .track .meta .name { font-weight: 600; font-size: 0.95rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .track .meta .sub { margin-top: 3px; font-size: 0.8rem; color: rgba(255, 255, 255, 0.58); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .track .dl {
+            flex: none; padding: 10px 16px; border-radius: 12px; border: 1px solid transparent; cursor: pointer;
+            font-size: 0.85rem; font-weight: 700; color: #fff;
+            background: linear-gradient(135deg, var(--accent), var(--accent-dark));
+        }
+        .track .dl:hover { filter: brightness(1.1); }
+        .track .dl:disabled { opacity: 0.5; cursor: not-allowed; filter: none; }
+
+        .empty { padding: 22px; border-radius: var(--radius-md); border: 1px dashed var(--line); color: rgba(255, 255, 255, 0.5); font-size: 0.9rem; text-align: center; }
+
+        .library-item {
+            display: flex; align-items: center; gap: 14px; padding: 12px; border-radius: var(--radius-md);
+            border: 1px solid var(--line); background: rgba(255, 255, 255, 0.05);
+            transition: transform 0.2s ease, background 0.2s ease;
+        }
+        .library-item:hover { background: rgba(255, 255, 255, 0.08); }
+        .library-item .cover { width: 58px; height: 58px; flex: none; border-radius: 12px; object-fit: cover; background: rgba(0,0,0,0.4); display: grid; place-items: center; font-size: 1.4rem; }
+        .library-item .meta { flex: 1; min-width: 0; overflow: hidden; }
+        
+        /* Effet Marquee pour les titres longs */
+        .marquee-container { overflow: hidden; white-space: nowrap; width: 100%; }
+        .marquee-text { display: inline-block; padding-left: 0; transition: transform 0.3s ease; }
+        .library-item:hover .marquee-text.should-scroll {
+            animation: marquee 8s linear infinite;
+        }
+        @keyframes marquee {
+            0% { transform: translateX(0); }
+            10% { transform: translateX(0); }
+            90% { transform: translateX(calc(-100% + 200px)); }
+            100% { transform: translateX(calc(-100% + 200px)); }
+        }
+
+        .library-item .meta .name { font-weight: 600; font-size: 0.95rem; }
+        .library-item .meta .sub { margin-top: 3px; font-size: 0.78rem; color: rgba(255, 255, 255, 0.55); }
+        .library-item audio { height: 38px; max-width: 200px; flex: none; }
+        
+        .btn-delete {
+            width: 38px; height: 38px; border-radius: 10px; border: 1px solid rgba(255, 70, 70, 0.2);
+            background: rgba(255, 70, 70, 0.1); color: #ff8585; display: grid; place-items: center;
+            cursor: pointer; transition: all 0.2s ease; flex: none;
+        }
+        .btn-delete:hover { background: #ff4646; color: #fff; border-color: transparent; transform: scale(1.05); }
+
+        .spinner {
+            width: 18px; height: 18px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.25);
+            border-top-color: #fff; animation: spin 0.7s linear infinite; display: inline-block; vertical-align: middle;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .footer {
+            display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+            padding: 22px 34px; border-top: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(0, 0, 0, 0.2); color: rgba(255, 255, 255, 0.55); font-size: 0.84rem;
+        }
+        .footer a { color: inherit; opacity: 0.8; }
+    </style>
+</head>
+<body>
+    <div class="bg-video-container">
+        <video autoplay muted loop playsinline poster="https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?q=80&w=2070&auto=format&fit=crop">
+            <source src="https://assets.mixkit.co/videos/preview/mixkit-stars-in-the-night-sky-background-9937-large.mp4" type="video/mp4">
+        </video>
+        <div class="bg-overlay"></div>
+    </div>
+
+    <main class="page">
+        <section class="shell">
+            <header class="topbar">
+                <div class="brand">
+                    <div class="brand-mark">🎵</div>
+                    <div class="brand-copy">
+                        <h1>DowFlow Music</h1>
+                        <p>Recherche · Téléchargement · Bibliothèque</p>
+                    </div>
+                </div>
+                <div class="topbar-right">
+                    <div class="ffmpeg-status">
+                        <span class="dot" id="ffmpegDot"></span>
+                        <span id="ffmpegText">FFmpeg : vérification...</span>
+                    </div>
+                    <a class="back-link" href="/">← Menu</a>
+                </div>
+            </header>
+
+            <section class="hero">
+                <div class="eyebrow">Espace Musique</div>
+                <h2>Trouve et télécharge n'importe quel morceau.</h2>
+                <p class="lead">
+                    Tape le nom d'un titre ou d'un artiste : DowFlow cherche la vidéo originale,
+                    télécharge l'audio dans le format choisi et récupère la pochette de l'album.
+                </p>
+            </section>
+
+            <section class="search-panel">
+                <form class="search-row" id="searchForm">
+                    <input id="searchInput" type="text" placeholder="Nom du morceau, artiste…" autocomplete="off">
+                    <button class="btn btn-primary" type="submit" id="searchBtn">Rechercher</button>
+                </form>
+
+                <div class="options-row">
+                    <label for="audioFormatSelect">Format</label>
+                    <select class="format-select" id="audioFormatSelect">
+                        <option value="mp3" selected>MP3 (192 kbps)</option>
+                        <option value="mp3_320">MP3 (320 kbps HQ)</option>
+                        <option value="m4a">M4A (iTunes)</option>
+                        <option value="aac">AAC (256 kbps)</option>
+                        <option value="flac">FLAC (lossless)</option>
+                        <option value="wav">WAV (non compressé)</option>
+                        <option value="opus">Opus (160 kbps)</option>
+                        <option value="ogg">OGG Vorbis (192 kbps)</option>
+                    </select>
+                    <label class="toggle" for="coverToggle">
+                        <input type="checkbox" id="coverToggle" checked>
+                        Télécharger la pochette
+                    </label>
+                </div>
+
+                <div class="progress-wrap" id="progressWrap">
+                    <div class="progress-bar"><div class="progress-bar-fill" id="progressFill"></div></div>
+                    <div class="status" id="statusMessage">Prêt.</div>
+                </div>
+            </section>
+
+            <section class="section" id="resultsSection" style="display:none">
+                <div class="section-head">
+                    <h3>Résultats</h3>
+                    <span id="resultsCount"></span>
+                </div>
+                <div class="track-list" id="resultsList"></div>
+            </section>
+
+            <section class="section">
+                <div class="section-head">
+                    <h3>Musiques populaires</h3>
+                    <span id="popularCount"></span>
+                </div>
+                <div class="track-list" id="popularList">
+                    <div class="empty"><span class="spinner"></span> Chargement des titres populaires…</div>
+                </div>
+            </section>
+
+            <section class="section">
+                <div class="section-head">
+                    <h3>Ma musique</h3>
+                    <span id="libraryCount"></span>
+                </div>
+                <div class="track-list" id="libraryList">
+                    <div class="empty">Aucun morceau téléchargé pour l'instant.</div>
+                </div>
+            </section>
+
+            <footer class="footer">
+                <span>DowFlow Music — téléchargement audio + pochettes</span>
+                <span>Propulsé par yt-dlp · pochettes <a href="https://www.deezer.com" target="_blank" rel="noopener">Deezer</a></span>
+            </footer>
+        </section>
+    </main>
+
+    <script>
+        const searchForm = document.getElementById("searchForm");
+        const searchInput = document.getElementById("searchInput");
+        const searchBtn = document.getElementById("searchBtn");
+        const audioFormatSelect = document.getElementById("audioFormatSelect");
+        const coverToggle = document.getElementById("coverToggle");
+        const resultsSection = document.getElementById("resultsSection");
+        const resultsList = document.getElementById("resultsList");
+        const resultsCount = document.getElementById("resultsCount");
+        const popularList = document.getElementById("popularList");
+        const popularCount = document.getElementById("popularCount");
+        const libraryList = document.getElementById("libraryList");
+        const libraryCount = document.getElementById("libraryCount");
+        const progressWrap = document.getElementById("progressWrap");
+        const progressFill = document.getElementById("progressFill");
+        const statusMessage = document.getElementById("statusMessage");
+
+        function escapeHtml(value) {
+            return String(value == null ? "" : value)
+                .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+        }
+
+        function formatDuration(seconds) {
+            if (!seconds && seconds !== 0) return "";
+            const total = Math.max(0, Math.round(Number(seconds)));
+            const m = Math.floor(total / 60);
+            const s = String(total % 60).padStart(2, "0");
+            return `${m}:${s}`;
+        }
+
+        function formatSize(bytes) {
+            if (!bytes) return "";
+            const mo = bytes / (1024 * 1024);
+            return mo >= 1024 ? `${(mo / 1024).toFixed(2)} Go` : `${mo.toFixed(1)} Mo`;
+        }
+
+        function setStatus(message, state) {
+            progressWrap.classList.add("visible");
+            statusMessage.textContent = message;
+            statusMessage.className = "status" + (state ? " " + state : "");
+        }
+
+        function setProgress(pct) {
+            progressFill.style.width = `${Math.max(0, Math.min(100, pct))}%`;
+        }
+
+        function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
+
+        async function pollJob(jobId) {
+            const started = Date.now();
+            while (Date.now() - started < 60 * 60 * 1000) {
+                const res = await fetch(`/jobs/${jobId}`);
+                const payload = await res.json();
+                if (!res.ok || !payload.success || !payload.job) {
+                    throw new Error((payload && payload.error) || "Suivi du job impossible");
+                }
+                const job = payload.job;
+                const pct = Math.max(0, Math.min(99, Number(job.progress) || 0));
+                setProgress(pct);
+                setStatus(`Téléchargement ${pct.toFixed(0)}%`, "");
+                if (["success", "failed", "skipped"].includes(job.status)) return job;
+                await sleep(500);
+            }
+            throw new Error("Téléchargement trop long (timeout)");
+        }
+
+        function trackCard(track) {
+            const card = document.createElement("div");
+            card.className = "track";
+            const thumb = track.thumbnail
+                ? `<img class="cover" src="${escapeHtml(track.thumbnail)}" alt="" loading="lazy">`
+                : `<div class="cover">🎵</div>`;
+            const duration = formatDuration(track.duration);
+            const sub = [track.artist, duration].filter(Boolean).map(escapeHtml).join(" · ");
+            card.innerHTML = `
+                ${thumb}
+                <div class="meta">
+                    <div class="name">${escapeHtml(track.title)}</div>
+                    <div class="sub">${sub || "—"}</div>
+                </div>
+                <button class="dl" type="button">↓ Télécharger</button>
+            `;
+            const btn = card.querySelector(".dl");
+            btn.addEventListener("click", () => downloadTrack(track, btn));
+            return card;
+        }
+
+        function renderTracks(container, tracks, emptyText) {
+            container.innerHTML = "";
+            if (!tracks || !tracks.length) {
+                container.innerHTML = `<div class="empty">${escapeHtml(emptyText)}</div>`;
+                return;
+            }
+            tracks.forEach((track) => container.appendChild(trackCard(track)));
+        }
+
+        async function downloadTrack(track, button) {
+            const original = button.textContent;
+            button.disabled = true;
+            button.textContent = "En cours…";
+            setProgress(0);
+            setStatus(`Préparation de « ${track.title} »…`, "");
+            try {
+                const res = await fetch("/api/music/download", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        url: track.url,
+                        title: track.title,
+                        artist: track.artist,
+                        audio_format: audioFormatSelect.value,
+                        with_cover: coverToggle.checked,
+                    }),
+                });
+                const start = await res.json();
+                if (!res.ok || !start.success) throw new Error(start.error || "Téléchargement impossible");
+                const job = await pollJob(start.job_id);
+                if (job.status === "success") {
+                    setProgress(100);
+                    const name = (job.result && job.result.filename) || track.title;
+                    setStatus(`Terminé : ${name}`, "success");
+                    loadLibrary();
+                } else {
+                    throw new Error(job.error || job.message || "Échec du téléchargement");
+                }
+            } catch (err) {
+                setStatus(err.message || "Erreur", "error");
+            } finally {
+                button.disabled = false;
+                button.textContent = original;
+            }
+        }
+
+        async function loadPopular() {
+            try {
+                const res = await fetch("/api/music/popular?limit=24");
+                const data = await res.json();
+                const tracks = (data && data.tracks) || [];
+                popularCount.textContent = tracks.length ? `${tracks.length} titres` : "";
+                renderTracks(popularList, tracks, "Aucun titre populaire disponible.");
+            } catch (err) {
+                renderTracks(popularList, [], "Impossible de charger les titres populaires.");
+            }
+        }
+
+        async function loadLibrary() {
+            try {
+                const res = await fetch("/api/music/library");
+                const data = await res.json();
+                const items = (data && data.items) || [];
+                libraryCount.textContent = items.length ? `${items.length} morceaux` : "";
+                libraryList.innerHTML = "";
+                if (!items.length) {
+                    libraryList.innerHTML = `<div class="empty">Aucun morceau téléchargé pour l'instant.</div>`;
+                    return;
+                }
+                items.forEach((item, index) => {
+                    const el = document.createElement("div");
+                    el.className = "library-item";
+                    el.dataset.filename = item.filename;
+                    const cover = item.cover_url
+                        ? `<img class="cover" src="${escapeHtml(item.cover_url)}" alt="" loading="lazy">`
+                        : `<div class="cover">🎵</div>`;
+                    el.innerHTML = `
+                        ${cover}
+                        <div class="meta">
+                            <div class="marquee-container">
+                                <div class="marquee-text name">${escapeHtml(item.title)}</div>
+                            </div>
+                            <div class="sub">${escapeHtml(formatSize(item.size))}</div>
+                        </div>
+                        <audio controls preload="none" src="${escapeHtml(item.audio_url)}"></audio>
+                        <button class="btn-delete" title="Supprimer">✕</button>
+                    `;
+                    
+                    const audio = el.querySelector("audio");
+                    const deleteBtn = el.querySelector(".btn-delete");
+                    const marqueeText = el.querySelector(".marquee-text");
+                    
+                    // Auto-play next
+                    audio.addEventListener("ended", () => {
+                        const nextItem = libraryList.children[index + 1];
+                        if (nextItem) {
+                            const nextAudio = nextItem.querySelector("audio");
+                            if (nextAudio) {
+                                nextAudio.play();
+                                nextItem.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            }
+                        }
+                    });
+
+                    // Suppression
+                    deleteBtn.addEventListener("click", async () => {
+                        if (!confirm(`Supprimer « ${item.title} » ?`)) return;
+                        try {
+                            const delRes = await fetch("/api/music/delete", {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ filename: item.filename })
+                            });
+                            const delData = await delRes.json();
+                            if (delData.success) {
+                                el.style.transform = "translateX(100px)";
+                                el.style.opacity = "0";
+                                setTimeout(() => loadLibrary(), 300);
+                            } else {
+                                alert(delData.error || "Erreur lors de la suppression");
+                            }
+                        } catch (e) {
+                            alert("Erreur réseau");
+                        }
+                    });
+
+                    // Check if marquee is needed
+                    setTimeout(() => {
+                        if (marqueeText.scrollWidth > marqueeText.clientWidth) {
+                            marqueeText.classList.add("should-scroll");
+                        }
+                    }, 100);
+
+                    libraryList.appendChild(el);
+                });
+            } catch (err) {
+                libraryList.innerHTML = `<div class="empty">Impossible de charger la bibliothèque.</div>`;
+            }
+        }
+
+        searchForm.addEventListener("submit", async (event) => {
+            event.preventDefault();
+            const query = searchInput.value.trim();
+            if (!query) return;
+            searchBtn.disabled = true;
+            resultsSection.style.display = "block";
+            resultsList.innerHTML = `<div class="empty"><span class="spinner"></span> Recherche…</div>`;
+            resultsCount.textContent = "";
+            try {
+                const res = await fetch("/api/music/search", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ query, limit: 24 }),
+                });
+                const data = await res.json();
+                const tracks = (data && data.tracks) || [];
+                resultsCount.textContent = tracks.length ? `${tracks.length} résultats` : "";
+                renderTracks(resultsList, tracks, "Aucun résultat pour cette recherche.");
+            } catch (err) {
+                renderTracks(resultsList, [], "La recherche a échoué.");
+            } finally {
+                searchBtn.disabled = false;
+            }
+        });
+
+        fetch("/check-ffmpeg")
+            .then((r) => r.json())
+            .then((data) => {
+                const dot = document.getElementById("ffmpegDot");
+                const text = document.getElementById("ffmpegText");
+                if (data.has_ffmpeg) { dot.classList.add("online"); text.textContent = "FFmpeg : prêt"; }
+                else { text.textContent = "FFmpeg : absent"; }
+            })
+            .catch(() => { document.getElementById("ffmpegText").textContent = "FFmpeg : inconnu"; });
+
+        loadPopular();
+        loadLibrary();
+    </script>
+</body>
+</html>

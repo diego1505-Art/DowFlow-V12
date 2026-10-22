@@ -4,6 +4,7 @@ from __future__ import annotations
 from typing import Any
 
 from .base import ExpandResult, OptionDef, SiteProfile
+from utils import yt_dlp_runtime_options
 
 
 def supports(url: str, host: str) -> bool:
@@ -71,6 +72,7 @@ def expand(url: str, options: dict[str, Any]) -> ExpandResult:
         "skip_download": True,
         "playlistend": max_items,
     }
+    ydl_opts.update(yt_dlp_runtime_options())
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:

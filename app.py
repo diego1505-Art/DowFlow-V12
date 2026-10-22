@@ -1,5 +1,4 @@
 import os
-import shutil
 import time
 import uuid
 from pathlib import Path
@@ -13,29 +12,45 @@ from config import (
     LOCAL_MEDIA_MAX_ENTRIES,
     ALLOWED_LOCAL_EXTENSIONS,
     PREVIEWABLE_EXTENSIONS,
+    AUDIO_OUTPUT_FORMATS,
 )
 from utils import has_ffmpeg, is_http_url
 from playlist import download_media, get_frontend_config
+from logger import get_logger
+from jobs import start_download_job, get_job, list_jobs
+from database import download_list, download_count_by_status
+import music
+
+log = get_logger("app")
 
 app = Flask(__name__)
 
 DOWNLOAD_FOLDER.mkdir(exist_ok=True)
+
+# Catégories du grand menu non encore implementees
+COMING_SOON_CATEGORIES: dict[str, tuple[str, str]] = {
+    "film": (
+        "Film / Serie",
+        "Telechargement de films et series (multi-saisons, pistes audio, sous-titres).",
+    ),
+    "anime": (
+        "Anime / Dessin anime",
+        "Animes, dessins animes et catalogues de diffusion en continu.",
+    ),
+    "image": (
+        "Manhwa / Manga / BD / Image",
+        "Chapitres, planches et images (manhwa, manga, bandes dessinees).",
+    ),
+}
+
 LOCAL_MEDIA_REGISTRY: dict[str, tuple[Path, float]] = {}
+DEBUG_MODE = os.environ.get("DOWFLOW_DEBUG", "").strip().lower() in {"1", "true", "yes", "on"}
+if DEBUG_MODE:
+    log.info("Mode DOWFLOW_DEBUG actif (logs console DEBUG)")
 
 
 def is_allowed_local_file(path: Path) -> bool:
     return path.is_file() and path.suffix.lower() in ALLOWED_LOCAL_EXTENSIONS
-
-
-def copy_local_media(source_path: Path) -> dict[str, str]:
-    safe_name = secure_filename(source_path.name) or f"local-{uuid.uuid4().hex}{source_path.suffix.lower()}"
-    destination = DOWNLOAD_FOLDER / f"{uuid.uuid4().hex[:8]}-{safe_name}"
-    shutil.copy2(source_path, destination)
-    return {
-        "filename": destination.name,
-        "filepath": str(destination),
-        "file_url": f"/media/{destination.name}",
-    }
 
 
 def cleanup_local_media_registry() -> None:
@@ -73,12 +88,206 @@ def register_local_media(source_path: Path) -> dict[str, str]:
 
 @app.route("/")
 def index():
+    """Grand menu : choix du type de telechargement."""
+    return render_template("menu.html", has_ffmpeg=has_ffmpeg())
+
+
+@app.route("/video")
+def video_page():
+    """Telechargeur video / audio generique (template historique)."""
     return render_template("dowload.html", has_ffmpeg=has_ffmpeg())
+
+
+@app.route("/music")
+def music_page():
+    """Espace musique : recherche, populaires, telechargement, bibliotheque."""
+    return render_template("music.html", has_ffmpeg=has_ffmpeg())
+
+
+@app.route("/film")
+@app.route("/anime")
+@app.route("/image")
+def coming_soon_page():
+    """Categories du menu pas encore disponibles."""
+    category = request.path.strip("/")
+    label, description = COMING_SOON_CATEGORIES.get(
+        category, ("Bientot disponible", "Cette categorie arrive prochainement.")
+    )
+    return render_template(
+        "coming_soon.html",
+        category=category,
+        label=label,
+        description=description,
+        has_ffmpeg=has_ffmpeg(),
+    )
+
+
+# ─────────────────────────────  API Musique  ─────────────────────────────────
+
+@app.route("/api/music/search", methods=["POST"])
+def music_search():
+    data = request.get_json(silent=True) or {}
+    query = str(data.get("query") or "").strip()
+    if not query:
+        return jsonify({"success": False, "error": "Requete vide."}), 400
+    try:
+        limit = int(data.get("limit") or 20)
+    except (TypeError, ValueError):
+        limit = 20
+    limit = max(1, min(limit, 50))
+    tracks = music.search_music(query, limit)
+    return jsonify({"success": True, "query": query, "tracks": tracks})
+
+
+@app.route("/api/music/popular")
+def music_popular():
+    try:
+        limit = int(request.args.get("limit") or 24)
+    except (TypeError, ValueError):
+        limit = 24
+    limit = max(1, min(limit, 50))
+    return jsonify({"success": True, "tracks": music.popular_music(limit)})
+
+
+@app.route("/api/music/download", methods=["POST"])
+def music_download():
+    data = request.get_json(silent=True) or {}
+    url = str(data.get("url") or "").strip()
+    if not url:
+        return jsonify({"success": False, "error": "Aucun morceau selectionne."}), 400
+
+    audio_format = str(data.get("audio_format") or "mp3")
+    if audio_format not in AUDIO_OUTPUT_FORMATS:
+        audio_format = "mp3"
+
+    job_id = start_download_job(
+        music.download_music_track,
+        url,
+        output_path=str(DOWNLOAD_FOLDER),
+        audio_format=audio_format,
+        with_cover=bool(data.get("with_cover", True)),
+        title=data.get("title"),
+        artist=data.get("artist"),
+    )
+    return jsonify({"success": True, "async": True, "job_id": job_id})
+
+
+@app.route("/api/music/library")
+def music_library():
+    try:
+        limit = int(request.args.get("limit") or 200)
+    except (TypeError, ValueError):
+        limit = 200
+    return jsonify({"success": True, "items": music.list_library(max(1, min(limit, 500)))})
+
+
+@app.route("/api/music/delete", methods=["POST"])
+def music_delete():
+    data = request.get_json(silent=True) or {}
+    filename = data.get("filename")
+    if not filename:
+        return jsonify({"success": False, "error": "Fichier non specifie."}), 400
+    
+    success = music.delete_track(filename)
+    if success:
+        return jsonify({"success": True, "message": "Morceau supprime."})
+    return jsonify({"success": False, "error": "Impossible de supprimer le morceau."}), 500
 
 
 @app.route("/check-ffmpeg")
 def check_ffmpeg():
     return jsonify({"has_ffmpeg": has_ffmpeg()})
+
+
+@app.route("/history")
+def history():
+    """Historique SQLite des telechargements (+ stats)."""
+    try:
+        limit = request.args.get("limit", default=50, type=int)
+        limit = max(1, min(limit or 50, 200))
+        status = (request.args.get("status") or "").strip() or None
+        rows = download_list(limit=limit, status=status)
+        return jsonify(
+            {
+                "success": True,
+                "counts": download_count_by_status(),
+                "items": rows,
+            }
+        )
+    except Exception as e:
+        log.error("[history] %s", e, exc_info=True)
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/jobs", methods=["GET"])
+def jobs_list():
+    return jsonify({"success": True, "jobs": list_jobs(limit=50)})
+
+
+@app.route("/jobs/<job_id>", methods=["GET"])
+def jobs_status(job_id: str):
+    job = get_job(job_id)
+    if job is None:
+        return jsonify({"success": False, "error": "Job introuvable."}), 404
+    return jsonify({"success": True, "job": job})
+
+
+@app.route("/download-async", methods=["POST"])
+def download_async():
+    """Lance un telechargement en arriere-plan ; retourne un job_id."""
+    try:
+        data = request.get_json() or {}
+        source_value = (data.get("url") or "").strip().replace("\n", "").replace("\r", "")
+        if not source_value:
+            return jsonify({"success": False, "error": "URL manquante."}), 400
+
+        # Chemins locaux : reponse immediate (pas de job)
+        local_path = Path(source_value).expanduser()
+        if not is_http_url(source_value) and is_allowed_local_file(local_path):
+            registered = register_local_media(local_path)
+            return jsonify(
+                {
+                    "success": True,
+                    "async": False,
+                    "filename": registered["filename"],
+                    "file_url": registered["file_url"],
+                    "source_type": "local",
+                    "source_label": str(local_path),
+                    "previewable": local_path.suffix.lower() in PREVIEWABLE_EXTENSIONS,
+                    "message": "Fichier local pret sans copie.",
+                }
+            )
+
+        if not is_http_url(source_value):
+            return jsonify({"success": False, "error": "URL invalide ou chemin local introuvable."}), 400
+
+        download_type = data.get("type", "video")
+        quality = data.get("quality", "best")
+        video_format = data.get("video_format", "mp4")
+        audio_format = data.get("audio_format", "mp3")
+        language = data.get("language") or None
+        if isinstance(language, str):
+            language = language.strip() or None
+        write_subtitles = bool(data.get("write_subtitles", False))
+        adaptive_quality = bool(data.get("adaptive_quality", True))
+
+        job_id = start_download_job(
+            download_media,
+            source_value,
+            output_path=str(DOWNLOAD_FOLDER),
+            download_type=download_type,
+            quality=quality,
+            video_format=video_format,
+            audio_format=audio_format,
+            language=language,
+            write_subtitles=write_subtitles,
+            adaptive_quality=adaptive_quality,
+        )
+        log.info("[download-async] job=%s url=%s", job_id, source_value[:120])
+        return jsonify({"success": True, "async": True, "job_id": job_id})
+    except Exception as e:
+        log.error("[download-async] %s", e, exc_info=True)
+        return jsonify({"success": False, "error": str(e)}), 500
 
 
 @app.route("/config")
@@ -154,20 +363,20 @@ def url_options():
     try:
         data = request.get_json() or {}
         url = (data.get("url") or "").strip()
-        print(f"[url-options] url={url or '(vide)'}", flush=True)
+        log.info("[url-options] url=%s", url or "(vide)")
         if not url:
             return jsonify({"success": False, "error": "URL manquante."}), 400
         from url_expanders import options_payload
         payload = options_payload(url)
-        print(
-            f"[url-options] site={payload.get('site_id')} "
-            f"available={payload.get('available')} "
-            f"options={len(payload.get('options') or [])}",
-            flush=True,
+        log.info(
+            "[url-options] site=%s available=%s options=%d",
+            payload.get("site_id"),
+            payload.get("available"),
+            len(payload.get("options") or []),
         )
         return jsonify(payload)
     except Exception as e:
-        print(f"[url-options] ERREUR: {e}", flush=True)
+        log.error("[url-options] ERREUR: %s", e, exc_info=True)
         return jsonify({"success": False, "error": f"Erreur système: {e}"}), 500
 
 
@@ -185,18 +394,20 @@ def expand_url_route():
             options["scope"] = "season" if data.get("current_only") else "all"
             options["current_only"] = bool(data.get("current_only"))
 
-        print(f"[expand-url] url={url} options={options}", flush=True)
+        log.info("[expand-url] url=%s options=%s", url, options)
         from url_expanders import expand_url
         result = expand_url(url, options)
         status = 200 if result.success else 400
-        print(
-            f"[expand-url] success={result.success} site={result.site_id} "
-            f"count={result.count or len(result.urls)} error={result.error}",
-            flush=True,
+        log.info(
+            "[expand-url] success=%s site=%s count=%s error=%s",
+            result.success,
+            result.site_id,
+            result.count or len(result.urls),
+            result.error,
         )
         return jsonify(result.to_dict()), status
     except Exception as e:
-        print(f"[expand-url] ERREUR: {e}", flush=True)
+        log.error("[expand-url] ERREUR: %s", e, exc_info=True)
         return jsonify({"success": False, "error": f"Erreur système: {e}"}), 500
 
 
@@ -212,18 +423,19 @@ def fetch_episodes():
             "scope": "season" if data.get("current_only") else "all",
             "current_only": bool(data.get("current_only")),
         }
-        print(f"[fetch-episodes] url={url} options={options}", flush=True)
+        log.info("[fetch-episodes] url=%s options=%s", url, options)
         from url_expanders import expand_url
         result = expand_url(url, options)
         status = 200 if result.success else 400
-        print(
-            f"[fetch-episodes] success={result.success} count={result.count or len(result.urls)} "
-            f"error={result.error}",
-            flush=True,
+        log.info(
+            "[fetch-episodes] success=%s count=%s error=%s",
+            result.success,
+            result.count or len(result.urls),
+            result.error,
         )
         return jsonify(result.to_dict()), status
     except Exception as e:
-        print(f"[fetch-episodes] ERREUR: {e}", flush=True)
+        log.error("[fetch-episodes] ERREUR: %s", e, exc_info=True)
         return jsonify({"success": False, "error": f"Erreur système: {e}"}), 500
 
 
@@ -240,10 +452,12 @@ def download():
         language = data.get("language") or None
         if isinstance(language, str):
             language = language.strip() or None
-        write_subtitles = bool(data.get("write_subtitles", True))
-        print(
-            f"[download] type={download_type} quality={quality} vfmt={video_format} afmt={audio_format} lang={language or '(auto)'} url={source_value or '(vide)'}",
-            flush=True,
+        write_subtitles = bool(data.get("write_subtitles", False))
+        adaptive_quality = bool(data.get("adaptive_quality", True))
+        log.info(
+            "[download] type=%s quality=%s vfmt=%s afmt=%s lang=%s adaptive=%s url=%s",
+            download_type, quality, video_format, audio_format,
+            language or "(auto)", adaptive_quality, source_value[:150] if source_value else "(vide)",
         )
 
         if not source_value:
@@ -276,6 +490,7 @@ def download():
             audio_format=audio_format,
             language=language,
             write_subtitles=write_subtitles,
+            adaptive_quality=adaptive_quality,
         )
 
         filename = result.get("filename")
@@ -324,7 +539,8 @@ def download():
         return jsonify(payload)
 
     except Exception as e:
-        error_msg = str(e)
+        error_msg = str(e).strip() or type(e).__name__
+        log.error("[download] Échec : %s", error_msg, exc_info=True)
         if "ffmpeg" in error_msg.lower() or "ffprobe" in error_msg.lower():
             return jsonify(
                 {
@@ -337,9 +553,23 @@ def download():
 
 
 if __name__ == "__main__":
-    print("\n" + "=" * 60)
-    print("DowFlow — Multi-Site Media Downloader")
-    print("=" * 60)
-    print("\nServeur démarré sur http://127.0.0.1:5001")
-    print("Ctrl+C pour arrêter\n")
-    app.run(debug=False, host="127.0.0.1", port=5001)
+    from logger import banner
+    banner(log, "DowFlow — Multi-Site Media Downloader")
+
+    # Analyse rapide du réseau au lancement
+    try:
+        from playlist import _measure_network_speed_mbps
+        log.info("Analyse du réseau au démarrage...")
+        speed = _measure_network_speed_mbps()
+        if speed > 0:
+            log.success("Débit détecté : %.2f Mbps", speed)
+        else:
+            log.warning("Débit non détecté (vérifiez votre connexion).")
+    except Exception:
+        pass
+
+    log.success("Serveur démarré sur http://127.0.0.1:5001")
+    if DEBUG_MODE:
+        log.info("DEBUG: historique=/history  jobs=/jobs  async=/download-async")
+    log.info("Ctrl+C pour arrêter")
+    app.run(debug=DEBUG_MODE, host="127.0.0.1", port=5001, use_reloader=False, threaded=True)

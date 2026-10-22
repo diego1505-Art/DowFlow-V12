@@ -42,6 +42,16 @@ REM ── FFmpeg ────────────────────�
 set "FFMPEG_BIN=%LOCALAPPDATA%\Microsoft\WinGet\Packages\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\ffmpeg-8.1.1-full_build\bin"
 if exist "%FFMPEG_BIN%\ffmpeg.exe" set "PATH=%FFMPEG_BIN%;%PATH%"
 
-start http://127.0.0.1:5001
+REM ── Runtime JavaScript pour yt-dlp / YouTube ─────────────────────────────
+where node >nul 2>&1
+if errorlevel 1 (
+    echo [ATTENTION] Node.js absent : l'extraction YouTube peut proposer moins de formats.
+    echo [INFO] Installe Node.js LTS puis relance DowFlow.
+) else (
+    node --version
+)
+
+echo DowFlow est disponible sur http://127.0.0.1:5001
+echo Ouvrez ou actualisez votre onglet existant. Aucun nouveau Chrome ne sera lance.
 python app.py
 pause

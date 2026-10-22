@@ -26,14 +26,17 @@ PREVIEWABLE_EXTENSIONS = {
 }
 
 # ── Formats de sortie Vidéo ──────────────────────────────────────────────────
-#   key → {"label", "ext", "container", "merge": bool, "acodec": str|None, "vcodec": str|None}
+#   key → {"label", "ext", "container", "merge": bool,
+#          "aext":  extention audio pour yt-dlp [ext=...]  (ex: "m4a", "opus", None=auto)
+#          "vext":  extention vidéo pour yt-dlp [ext=...]  (ex: "mp4", "webm", None=auto)
+#          Anciens noms "vcodec"/"acodec" conservés 1 release pour rétro-compatibilité.
 VIDEO_OUTPUT_FORMATS: dict = {
-    "best":   {"label": "Auto (meilleur possible)", "ext": None,  "container": None,   "merge": True,  "acodec": None, "vcodec": None},
-    "mp4":    {"label": "MP4 (universel)",          "ext": ".mp4", "container": "mp4",  "merge": True,  "acodec": "m4a", "vcodec": "mp4"},
-    "mkv":    {"label": "MKV (matroska)",           "ext": ".mkv", "container": "mkv",  "merge": True,  "acodec": None, "vcodec": None},
-    "webm":   {"label": "WebM (libre)",             "ext": ".webm","container": "webm", "merge": True,  "acodec": "opus","vcodec": "vp9"},
-    "mov":    {"label": "MOV (QuickTime)",          "ext": ".mov", "container": "mov",  "merge": True,  "acodec": None, "vcodec": None},
-    "avi":    {"label": "AVI (legacy)",             "ext": ".avi", "container": "avi",  "merge": False, "acodec": None, "vcodec": None},
+    "best":   {"label": "Auto (meilleur possible)", "ext": None,  "container": None,   "merge": True,  "aext": None, "vext": None, "acodec": None, "vcodec": None},
+    "mp4":    {"label": "MP4 (universel)",          "ext": ".mp4", "container": "mp4",  "merge": True,  "aext": "m4a","vext": "mp4","acodec": "m4a","vcodec": "mp4"},
+    "mkv":    {"label": "MKV (matroska)",           "ext": ".mkv", "container": "mkv",  "merge": True,  "aext": None, "vext": None, "acodec": None, "vcodec": None},
+    "webm":   {"label": "WebM (libre)",             "ext": ".webm","container": "webm", "merge": True,  "aext": "opus","vext":"webm","acodec": "opus","vcodec": "webm"},
+    "mov":    {"label": "MOV (QuickTime)",          "ext": ".mov", "container": "mov",  "merge": True,  "aext": None, "vext": None, "acodec": None, "vcodec": None},
+    "avi":    {"label": "AVI (legacy)",             "ext": ".avi", "container": "avi",  "merge": False, "aext": None, "vext": None, "acodec": None, "vcodec": None},
 }
 
 # ── Formats de sortie Audio ──────────────────────────────────────────────────
@@ -82,7 +85,7 @@ LANGUAGES: dict = {
     "ru":     {"label": "Русский / Russian",         "aliases": {"ru", "rus", "russian"}},
     "ja":     {"label": "日本語 / Japanese",         "aliases": {"ja", "jpn", "japanese", "jp"}},
     "ko":     {"label": "한국어 / Korean",           "aliases": {"ko", "kor", "korean"}},
-    "zh":     {"label": "中文 / Chinese",            "aliases": {"zh", "chi", "chinese", "cmn", "zh-cn", "zh-tw"}},
+    "zh":     {"label": "中文 / Chinese",            "aliases": {"zh", "chi", "chinese", "cmn", "zh-cn", "zh-tw", "zh-hans", "zh-hant", "zh_cn", "zh_tw"}},
     "ar":     {"label": "العربية / Arabic",          "aliases": {"ar", "ara", "arabic"}},
     "hi":     {"label": "हिन्दी / Hindi",            "aliases": {"hi", "hin", "hindi"}},
     "tr":     {"label": "Türkçe / Turkish",          "aliases": {"tr", "tur", "turkish"}},
@@ -112,20 +115,6 @@ LANGUAGES: dict = {
     "ur":     {"label": "اردو / Urdu",               "aliases": {"ur", "urd", "urdu"}},
     "multi":  {"label": "Multi-langues / toutes",    "aliases": {"multi", "all", "multilingual"}},
 }
-
-
-def get_language_label(lang_code: str) -> str:
-    """Retourne le label lisible d'une langue, avec fallback sur le code."""
-    code = (lang_code or "").strip().lower()
-    if not code:
-        return "Auto"
-    if code in LANGUAGES:
-        return LANGUAGES[code]["label"]
-    # Recherche dans les aliases
-    for key, meta in LANGUAGES.items():
-        if code in meta["aliases"]:
-            return meta["label"]
-    return lang_code.upper()
 
 
 def normalize_language(lang_value: str | None) -> str:
@@ -188,6 +177,7 @@ LOCAL_MEDIA_MAX_ENTRIES = 128
 # Set DOWFLOW_BROWSER_VISIBLE=1 before starting the app if you need to debug the browser.
 BROWSER_HEADLESS = os.environ.get("DOWFLOW_BROWSER_VISIBLE", "").strip().lower() not in {"1", "true", "yes", "on"}
 BROWSER_PROFILE_DIR = BASE_DIR / "browser_profile"
+YOUTUBE_COOKIES_FILE = BASE_DIR / "youtube_cookies.txt"
 
 # Proxy settings (Optional)
 # Format: ["http://user:pass@host:port", "http://host2:port2"]
