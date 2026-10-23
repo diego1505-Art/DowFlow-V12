@@ -150,7 +150,6 @@
                     <span id="ffmpegText">FFmpeg : {% if has_ffmpeg %}OK{% else %}non installé{% endif %}</span>
                 </div>
                 <div class="menu-actions">
-                    <button class="action-button" type="button" id="renameButton">Renommer</button>
                     {% include "_publisher_export.html" %}
                 </div>
             </header>
@@ -182,55 +181,5 @@
         </section>
     </main>
 
-    <dialog id="menuDialog">
-        <form method="dialog" id="menuForm">
-            <h2 id="dialogTitle">Renommer un menu</h2>
-            <label for="menuScope">Élément à traiter</label>
-            <select id="menuScope">
-                <option value="root">Menu entier</option>
-                {% for item in menu["items"] %}
-                <option value="{{ item.id }}">{{ item.label }}</option>
-                {% endfor %}
-            </select>
-            <label for="menuName">Nom</label>
-            <input id="menuName" maxlength="120" value="{{ menu.name }}" required>
-            <div class="dialog-actions">
-                <button class="action-button" value="cancel">Annuler</button>
-                <button class="action-button" id="dialogSubmit" value="default">Enregistrer</button>
-            </div>
-        </form>
-    </dialog>
-    <script>
-        const dialog = document.getElementById('menuDialog');
-        const scope = document.getElementById('menuScope');
-        const nameInput = document.getElementById('menuName');
-        const form = document.getElementById('menuForm');
-        const submit = document.getElementById('dialogSubmit');
-        const rootName = {{ menu.name|tojson }};
-
-        function openMenuDialog() {
-            scope.value = 'root';
-            nameInput.value = rootName;
-            dialog.showModal();
-        }
-
-        document.getElementById('renameButton').addEventListener('click', openMenuDialog);
-        scope.addEventListener('change', () => {
-            nameInput.value = scope.value === 'root' ? rootName : scope.options[scope.selectedIndex].textContent;
-        });
-        form.addEventListener('submit', async (event) => {
-            if (event.submitter?.value === 'cancel') return;
-            event.preventDefault();
-            const id = scope.value;
-            const label = nameInput.value.trim();
-            if (!label) return;
-            const response = await fetch('/api/menu/rename', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({id, label})
-            });
-            if (response.ok) window.location.reload();
-        });
-    </script>
 </body>
 </html>
