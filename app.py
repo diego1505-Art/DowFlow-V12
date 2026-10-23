@@ -20,8 +20,7 @@ from playlist import download_media, get_frontend_config
 from logger import get_logger
 from jobs import start_download_job, get_job, list_jobs
 from database import download_list, download_count_by_status
-from menu_config import export_menu, load_menu, rename_menu
-from tunnels import TunnelError, slugify, start as start_tunnel, status as tunnel_status, stop as stop_tunnel
+from menu_config import load_menu
 import music
 
 log = get_logger("app")
@@ -98,7 +97,7 @@ def register_local_media(source_path: Path) -> dict[str, str]:
 def index():
     """Grand menu : choix du type de telechargement."""
     menu = load_menu()
-    return render_template("menu.html", has_ffmpeg=has_ffmpeg(), menu=menu, export_scope="root", export_name=menu["name"])
+    return render_template("menu.html", has_ffmpeg=has_ffmpeg(), menu=menu)
 
 
 @app.get("/api/menu")
@@ -119,117 +118,16 @@ def rename_menu_api():
         return jsonify({"success": False, "error": "Ce menu n'existe pas."}), 404
 
 
-@app.get("/api/menu/export")
-def export_menu_api():
-    menu_id = request.args.get("id", "root").strip()
-    requested_name = request.args.get("name", "").strip()
-    try:
-        payload = export_menu(menu_id)
-    except KeyError:
-        return jsonify({"success": False, "error": "Ce menu n'existe pas."}), 404
-    if requested_name:
-        payload["name"] = requested_name[:120]
-    filename = secure_filename(payload["name"]) or "dowflow-menu"
-    response = jsonify(payload)
-    response.headers["Content-Disposition"] = f'attachment; filename="{filename}.json"'
-    response.headers["Content-Type"] = "application/json; charset=utf-8"
-    return response
-
-
-PUBLISHER_PATHS = {
-    "root": "/",
-    "video": "/video",
-    "music": "/music",
-    "film": "/film",
-    "anime": "/anime",
-    "image": "/image",
-}
-
-
-@app.get("/api/publisher/link")
-def publisher_link():
-    scope = request.args.get("scope", "root").strip()
-    name = request.args.get("name", "DowFlow").strip()[:120] or "DowFlow"
-    provider = request.args.get("provider", "local").strip()
-    if scope not in PUBLISHER_PATHS:
-        return jsonify({"success": False, "error": "Cet espace n'existe pas."}), 404
-    public_url = request.host_url.rstrip("/") + f"/{slugify(name)}"
-    if scope != "root":
-        public_url += PUBLISHER_PATHS[scope]
-    commands = {
-        "cloudflare": "cloudflared tunnel --url http://127.0.0.1:5001",
-        "ngrok": "ngrok http 5001",
-        "other": "Utilisez votre tunnel HTTP/HTTPS vers le port 5001.",
-        "local": "Utilisez cette URL sur cet ordinateur ou son adresse IP locale.",
-    }
-    return render_template(
-        "publisher_result.html",
-        export_name=name,
-        export_scope=scope,
-        public_url=public_url,
-        provider=provider,
-        tunnel_command=commands.get(provider, commands["other"]),
-        mode="link",
-    )
-
-
-@app.post("/api/publisher/tunnel/start")
-def publisher_tunnel_start():
-    payload = request.get_json(silent=True) or {}
-    provider = str(payload.get("provider", "")).strip()
-    scope = str(payload.get("scope", "root")).strip()
-    name = str(payload.get("name", "DowFlow")).strip()
-    if scope not in PUBLISHER_PATHS:
-        return jsonify({"success": False, "error": "Cet espace n'existe pas."}), 404
-    try:
-        return jsonify({"success": True, **start_tunnel(provider, scope, name)})
-    except TunnelError as error:
-        return jsonify({"success": False, "error": str(error)}), 400
-
-
-@app.get("/api/publisher/tunnel/status")
-def publisher_tunnel_status():
-    return jsonify(tunnel_status())
-
-
-@app.post("/api/publisher/tunnel/stop")
-def publisher_tunnel_stop():
-    return jsonify({"success": True, **stop_tunnel()})
-
-
-@app.get("/<export_slug>")
-def named_root_page(export_slug):
-    if export_slug in {"api", "static"}:
-        abort(404)
-    menu = load_menu()
-    return render_template("menu.html", has_ffmpeg=has_ffmpeg(), menu=menu, export_scope="root", export_name=menu["name"])
-
-
-@app.get("/<export_slug>/<scope>")
-def named_scope_page(export_slug, scope):
-    if export_slug in {"api", "static"} or scope not in PUBLISHER_PATHS or scope == "root":
-        abort(404)
-    if scope == "video":
-        return video_page()
-    if scope == "music":
-        return music_page()
-    label, description = COMING_SOON_CATEGORIES.get(scope, (scope.title(), ""))
-    return render_template(
-        "coming_soon.html", category=scope, label=label, description=description,
-        has_ffmpeg=has_ffmpeg(), export_scope=scope, export_name=label,
-    )
-
-
 @app.route("/video")
 def video_page():
     """Telechargeur video / audio generique (template historique)."""
-    return render_template("dowload.html", has_ffmpeg=has_ffmpeg(), export_scope="video", export_name="DowFlow Vidéo")
+    return render_template("dowload.html", has_ffmpeg=has_ffmpeg())
 
 
 @app.route("/music")
 def music_page():
     """Espace musique : recherche, populaires, telechargement, bibliotheque."""
-    return render_template("music.html", has_ffmpeg=has_ffmpeg(), export_scope="music", export_name="DowFlow Musique")
+    return render_template("music.html", has_ffmpeg=has_ffmpeg())
 
 
 @app.route("/film")
@@ -247,8 +145,6 @@ def coming_soon_page():
         label=label,
         description=description,
         has_ffmpeg=has_ffmpeg(),
-        export_scope=category,
-        export_name=label,
     )
 
 

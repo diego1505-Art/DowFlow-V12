@@ -67,23 +67,6 @@ Le centre de diagnostic interactif se lance avec :
 .\debug.bat
 ```
 
-## Export et accès depuis d'autres appareils
-
-Chaque espace possède un bouton **Exporter**. Il permet de choisir un nom et un mode de publication :
-
-- **Lien HTTP / HTTPS** : ouvre l'espace courant et affiche l'adresse à partager.
-- **Cloudflare Tunnel** : lancez `cloudflared tunnel --url http://127.0.0.1:5001` pour obtenir une URL HTTPS publique.
-- **ngrok** : lancez `ngrok http 5001` pour obtenir une URL HTTPS publique.
-
-Pour autoriser les appareils du même réseau local à accéder au serveur :
-
-```powershell
-$env:DOWFLOW_HOST = "0.0.0.0"
-python app.py
-```
-
-L'adresse à partager sera alors l'adresse IP locale de l'ordinateur, par exemple `http://192.168.1.20:5001`. Le serveur doit rester démarré. Pour un accès public, utilisez un tunnel authentifié et ne partagez jamais vos cookies ou vos identifiants.
-
 ## Organisation du projet
 
 | Fichier ou dossier | Rôle |

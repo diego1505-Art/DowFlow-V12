@@ -74,11 +74,3 @@ def rename_menu(menu_id: str, label: str) -> dict[str, Any]:
     return save_menu(config)
 
 
-def export_menu(menu_id: str | None = None) -> dict[str, Any]:
-    config = load_menu()
-    if not menu_id or menu_id == "root":
-        return config
-    item = next((item for item in config["items"] if item["id"] == menu_id), None)
-    if item is None:
-        raise KeyError(menu_id)
-    return {"name": item["label"], "description": item["description"], "parent": config["name"], "items": [item]}
