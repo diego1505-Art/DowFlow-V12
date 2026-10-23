@@ -17,10 +17,11 @@ from config import (
     VIDEO_QUALITIES,
     LANGUAGES,
     YOUTUBE_COOKIES_FILE,
+    CONNECTIONS_OVERRIDE,
     normalize_language,
     detect_language_from_url,
 )
-from utils import _resolve_ffmpeg_dir, yt_dlp_runtime_options
+from utils import _resolve_ffmpeg_dir, pick_connection_tier, pick_proxy, yt_dlp_runtime_options
 from logger import get_logger
 from database import download_start, download_finish
 
@@ -79,7 +80,7 @@ def _slugify(value: str) -> str:
 
 def _friendly_cookie_error(error: Exception) -> str | None:
     message = str(error).lower()
-    if "could not copy chrome cookie database" in message or "permission denied" in message and "cookies" in message:
+    if "could not copy chrome cookie database" in message or ("permission denied" in message and "cookies" in message):
         return (
             "Windows bloque la lecture des cookies de votre profil Chrome. Pour garder votre "
             "navigateur ouvert, exportez les cookies (YouTube/Instagram) au format Netscape dans "
@@ -262,20 +263,80 @@ def _resolve_quality_key(raw_quality: str) -> str:
     return "best"
 
 
-def _measure_network_speed_mbps(url: str = "https://www.google.com/favicon.ico", timeout_seconds: float = 5.0) -> float:
-    """Mesure un débit réseau de base pour choisir la qualité admissible."""
-    try:
-        # On utilise Google ou YouTube pour une mesure plus stable
-        start = time.time()
-        with urlopen(url, timeout=timeout_seconds) as resp:
-            # On lit un peu plus de données (1 Mo) pour lisser les pics
-            chunk = resp.read(1024 * 1024)
-            elapsed = max(time.time() - start, 0.001)
-        bytes_received = max(len(chunk), 1)
-        # Retourne le débit réel sans facteur de sécurité excessif
-        return (bytes_received * 8.0 / (elapsed * 1000000.0))
-    except Exception:
-        return 0.0
+# Endpoints de test de débit, essayés dans l'ordre : certains réseaux/FAI bloquent
+# Cloudflare (403) ou d'autres hôtes, on prend la première mesure exploitable.
+_SPEED_TEST_URLS = (
+    "https://speed.cloudflare.com/__down?bytes=5000000",
+    "https://proof.ovh.net/files/1Mb.dat",
+    "https://github.com/git/git/archive/refs/tags/v2.43.0.tar.gz",
+    "https://www.google.com/favicon.ico",
+)
+
+
+def _measure_network_speed_mbps(url: str | None = None, timeout_seconds: float = 8.0) -> float:
+    """Mesure un débit réseau réel (échantillon ~5 Mo) pour choisir la qualité admissible."""
+    candidates = (url,) if url else _SPEED_TEST_URLS
+    for candidate in candidates:
+        try:
+            start = time.time()
+            with urlopen(candidate, timeout=timeout_seconds) as resp:
+                # On lit un échantillon significatif (5 Mo) pour éviter les mesures faussées
+                # par les petits fichiers (ex. favicon) dont le débit ne reflète pas la bande passante.
+                chunk = resp.read(5 * 1024 * 1024)
+                elapsed = max(time.time() - start, 0.001)
+            if chunk:
+                return (len(chunk) * 8.0 / (elapsed * 1000000.0))
+        except Exception:
+            continue
+    return 0.0
+
+
+# ── Palier de connexions parallèles (affiné une fois au démarrage) ───────────
+# Valeur par défaut prudente : elle reste active tant que la détection de
+# capacité n'a pas tourné (tests, usage programmatique).
+_CONNECTION_TIER = 16
+_CONNECTION_TIER_DETECTED = False
+
+
+def get_connection_tier() -> int:
+    """Palier de connexions en cours (8/16/32/64/128)."""
+    return _CONNECTION_TIER
+
+
+def detect_connection_tier(speed_mbps: float | None = None, force: bool = False) -> int:
+    """Détecte la capacité de la machine et fixe le palier de connexions.
+
+    Croise la puissance du PC (cœurs logiques) et le débit réseau pour choisir
+    un palier 8/16/32/64/128, sans jamais saturer la machine. Surchargeable via
+    la variable d'environnement DOWFLOW_CONNECTIONS.
+    """
+    global _CONNECTION_TIER, _CONNECTION_TIER_DETECTED
+    if _CONNECTION_TIER_DETECTED and not force:
+        return _CONNECTION_TIER
+
+    override = 0
+    if CONNECTIONS_OVERRIDE:
+        try:
+            override = int(CONNECTIONS_OVERRIDE)
+        except ValueError:
+            log.warning("[perf] DOWFLOW_CONNECTIONS invalide (%r), ignoré.", CONNECTIONS_OVERRIDE)
+
+    if override > 0:
+        _CONNECTION_TIER = max(1, override)
+        log.info("[perf] Connexions forcées : x%d (DOWFLOW_CONNECTIONS)", _CONNECTION_TIER)
+    else:
+        cores = os.cpu_count() or 2
+        measured = speed_mbps if speed_mbps is not None else _measure_network_speed_mbps()
+        _CONNECTION_TIER = pick_connection_tier(cores, measured)
+        log.info(
+            "[perf] Palier de connexions : x%d (%d cœurs, débit %s)",
+            _CONNECTION_TIER,
+            cores,
+            f"{measured:.1f} Mbps" if measured > 0 else "non détecté",
+        )
+
+    _CONNECTION_TIER_DETECTED = True
+    return _CONNECTION_TIER
 
 
 def _tier_for_resolution(resolution: int) -> str | None:
@@ -333,17 +394,12 @@ def _make_adaptive_watch_hook(user_hook: Callable[[dict[str, Any]], None] | None
     def hook(progress: dict[str, Any]) -> None:
         if user_hook is not None:
             user_hook(progress)
-        if progress.get("status") != "downloading" or state["decided"]:
+        if progress.get("status") != "downloading":
             return
 
         tier = _tier_for_resolution(_progress_resolution(progress))
         if tier is None:
             return  # flux audio ou résolution inconnue : aucune décision à prendre
-
-        next_quality = _next_lower_quality(tier)
-        if next_quality is None:
-            state["decided"] = True  # déjà au palier le plus bas
-            return
 
         now = time.time()
         filename = progress.get("filename")
@@ -352,6 +408,15 @@ def _make_adaptive_watch_hook(user_hook: Callable[[dict[str, Any]], None] | None
             state["filename"] = filename
             state["started_at"] = now
             state["start_bytes"] = progress.get("downloaded_bytes") or 0
+            state["decided"] = False
+            return
+
+        if state["decided"]:
+            return
+
+        next_quality = _next_lower_quality(tier)
+        if next_quality is None:
+            state["decided"] = True  # déjà au palier le plus bas
             return
 
         elapsed = now - (state["started_at"] or now)
@@ -367,11 +432,14 @@ def _make_adaptive_watch_hook(user_hook: Callable[[dict[str, Any]], None] | None
         speed = transferred / elapsed
         eta = max(total - done, 0) / speed
         threshold = _ADAPTIVE_TIME_THRESHOLDS.get(tier)
-        state["decided"] = True
+
+        # Le but est que le téléchargement ne dépasse jamais le temps du seuil.
+        # Si l'ETA est trop long, on downgrade immédiatement, peu importe le débit réel.
         if threshold and eta > threshold:
+            state["decided"] = True
             raise _AdaptiveDowngrade(
                 next_quality,
-                f"Débit limité détecté (ETA {int(eta)}s en {tier}) → passage en {next_quality}",
+                f"Temps de téléchargement estimé trop long ({int(eta)}s > seuil {threshold}s en {tier}) → passage en {next_quality}",
             )
 
     return hook
@@ -821,8 +889,23 @@ def _slugify_filename(value: str) -> str:
 
 def _extract_info_with_cookie_retry(url: str, ydl_opts: dict[str, Any]) -> dict[str, Any]:
     """extract_info avec repli sur les cookies (fichier ou Chrome) si l'accès est bloqué."""
+    ydl_class = yt_dlp.YoutubeDL
+    if ydl_opts.get("writesubtitles") or ydl_opts.get("writeautomaticsub"):
+        class OptionalSubtitleErrorsYoutubeDL(yt_dlp.YoutubeDL):
+            def _write_subtitles(self, info_dict, filename):
+                try:
+                    return super()._write_subtitles(info_dict, filename)
+                except yt_dlp.utils.DownloadError as exc:
+                    log.warning(
+                        "[subtitles] Sous-titres indisponibles (%s); la vidéo sera conservée.",
+                        exc,
+                    )
+                    return []
+
+        ydl_class = OptionalSubtitleErrorsYoutubeDL
+
     try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:  # pyright: ignore[reportArgumentType]
+        with ydl_class(ydl_opts) as ydl:  # pyright: ignore[reportArgumentType]
             return ydl.extract_info(url, download=True)
     except Exception as e:
         if not _needs_session(e):
@@ -833,7 +916,7 @@ def _extract_info_with_cookie_retry(url: str, ydl_opts: dict[str, Any]) -> dict[
             "le fichier youtube_cookies.txt" if cookie_file else "les cookies du navigateur Chrome",
         )
         retry_opts = _cookie_retry_options(ydl_opts, cookie_file)
-        with yt_dlp.YoutubeDL(retry_opts) as ydl:  # pyright: ignore[reportArgumentType]
+        with ydl_class(retry_opts) as ydl:  # pyright: ignore[reportArgumentType]
             return ydl.extract_info(url, download=True)
 
 
@@ -861,6 +944,18 @@ def _ydlp_download(
     subtitle_lang_opts = _build_subtitle_lang_options(language) if write_subtitles else {}
     runtime_options = yt_dlp_runtime_options()
     aria2c_path = shutil.which("aria2c")
+    proxy_url = pick_proxy()
+    if proxy_url:
+        log.info("[proxy] Trafic via %s", proxy_url.split("@")[-1])
+
+    # Palier de connexions retenu pour ce téléchargement. aria2c plafonne à 16
+    # connexions par serveur : au-delà (gros PC / grosse ligne), on s'appuie sur
+    # le téléchargeur natif de yt-dlp qui parallélise les fragments sans limite.
+    connection_tier = get_connection_tier()
+    monitor_adaptive = bool(adaptive_quality and download_type == "video" and quality == "best")
+    # yt-dlp ne relaie les hooks aria2c qu'à la fin du fichier : pas de mesure
+    # exploitable pour décider d'un downgrade pendant un téléchargement Turbo.
+    use_turbo = bool(aria2c_path) and connection_tier <= 16 and not monitor_adaptive
 
     def build_ydl_opts(quality_key: str, force_native: bool = False) -> dict[str, Any]:
         """Options yt-dlp pour une qualité donnée (reconstruites à chaque tentative)."""
@@ -892,7 +987,9 @@ def _ydlp_download(
             "prefer_ffmpeg": has_ffmpeg,
             "merge_output_format": merge_output_format,
             "noplaylist": True,
-            "concurrent_fragment_downloads": 1 if force_native else 16,
+            # Téléchargeur natif : le nombre de fragments est parallélisé selon la
+            # capacité de la machine (8→128). En repli « discret » on reste à 1.
+            "concurrent_fragment_downloads": 1 if force_native else get_connection_tier(),
             "retries": 10, # 10 tentatives pour tout le monde
             "fragment_retries": 10,
             "file_access_retries": 5,
@@ -900,6 +997,8 @@ def _ydlp_download(
             "http_chunk_size": 10485760,
             "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         }
+        if proxy_url:
+            opts["proxy"] = proxy_url
         if format_sort:
             opts["format_sort"] = format_sort
         # Sous-titres récupérés dans la même passe que la vidéo
@@ -914,30 +1013,44 @@ def _ydlp_download(
             opts["ffmpeg_location"] = ffmpeg_dir
 
         # Stratégie Turbo (aria2c) vs Native
-        if aria2c_path and not force_native:
+        if use_turbo and not force_native:
+            connections = min(connection_tier, 16)
             opts["external_downloader"] = "aria2c"
-            opts["external_downloader_args"] = [
-                "--max-connection-per-server=16",
-                "--split=16",
+            args = [
+                f"--max-connection-per-server={connections}",
+                f"--split={connections}",
                 "--min-split-size=1M",
-                "--max-concurrent-downloads=16",
+                f"--max-concurrent-downloads={connections}",
                 "--optimize-concurrent-downloads=true",
                 "--file-allocation=none",
                 "--disk-cache=64M",
                 "--continue=true",
+                # Agents bloqués/ralentis : on récupère beaucoup plus vite que le
+                # défaut (60 s) au lieu de laisser une connexion morte occuper un slot.
+                "--connect-timeout=10",
+                "--timeout=30",
+                "--max-tries=10",
+                "--retry-wait=2",
+                # On ignore tout aria2.conf global qui pourrait parasiter (proxy, splits…).
+                "--no-conf=true",
+                # La vidéo est déjà compressée : on supprime la négociation gzip inutile.
+                "--http-accept-gzip=false",
+                "--enable-http-keep-alive=true",
             ]
+            if proxy_url:
+                args.append(f"--all-proxy={proxy_url}")
+            opts["external_downloader_args"] = args
         return opts
 
-    monitor_adaptive = bool(adaptive_quality and download_type == "video" and quality == "best")
     requested_quality = quality
     current_quality = quality
     quality_changed = False
     adaptive_note: str | None = None
 
-    if aria2c_path:
-        log.info("[turbo] Téléchargeur rapide activé (x16 connexions)")
+    if use_turbo:
+        log.info("[turbo] Téléchargeur rapide activé (x%d connexions)", connection_tier)
     else:
-        log.info("[native] Téléchargeur yt-dlp activé")
+        log.info("[native] Téléchargeur yt-dlp activé (x%d fragments)", connection_tier)
 
     before_files = set(os.listdir(output_path))
 
@@ -982,9 +1095,14 @@ def _ydlp_download(
             except Exception as e:
                 # Si on était en mode Turbo et qu'on détecte un blocage/erreur protocole,
                 # on tente une dernière chance en mode Natif (discret).
-                if not force_native and aria2c_path:
+                if not force_native and use_turbo:
                     msg = str(e).lower()
-                    is_blocking = any(k in msg for k in ("403", "forbidden", "inaccessible", "429", "denied"))
+                    # "aria2c exited with code 22" ne contient pas "403" alors que la cause réelle
+                    # côté aria2c EST un 403 : on bascule aussi en Natif sur tout échec aria2c.
+                    is_blocking = any(
+                        k in msg
+                        for k in ("403", "forbidden", "inaccessible", "429", "denied", "aria2c exited with code")
+                    )
                     if is_blocking:
                         log.warning("[fallback] Blocage détecté en mode Turbo -> passage en mode Natif discret")
                         force_native = True

@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DowFlow - Menu</title>
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
     <style>
         :root {
             --surface: rgba(255, 255, 255, 0.08);
@@ -51,8 +52,8 @@
         .brand { display: flex; align-items: center; gap: 14px; }
         .brand-mark {
             display: grid; place-items: center; width: 44px; height: 44px; border-radius: 14px;
-            background: linear-gradient(135deg, #ff0000 0%, #cc0000 100%);
-            font-size: 1.1rem; font-weight: 700; box-shadow: 0 8px 20px rgba(255, 0, 0, 0.3);
+            background: linear-gradient(135deg, #e96b3d, #9c351d); border: 1px solid rgba(255, 161, 112, 0.4);
+            color: #fff2e9; font-size: 1.15rem; font-weight: 800; box-shadow: 0 8px 20px rgba(201, 96, 52, 0.28);
         }
         .brand-copy h1 { font-size: 1.2rem; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; }
         .brand-copy p { color: rgba(255, 255, 255, 0.65); font-size: 0.86rem; }
@@ -93,9 +94,10 @@
         .card.disabled { cursor: pointer; opacity: 0.82; }
         .card.disabled:hover { transform: translateY(-2px); border-color: rgba(255, 255, 255, 0.24); }
 
-        .card-icon {
-            display: grid; place-items: center; width: 56px; height: 56px; border-radius: 18px;
-            font-size: 1.6rem; background: rgba(0, 0, 0, 0.32); border: 1px solid var(--line);
+        .card-index {
+            display: grid; place-items: center; width: 48px; height: 36px; border-radius: 10px;
+            color: #f3a47e; font-size: 0.8rem; font-weight: 700;
+            background: rgba(0, 0, 0, 0.24); border: 1px solid var(--line);
         }
         .card h3 { font-size: 1.18rem; font-weight: 700; }
         .card p { color: rgba(255, 255, 255, 0.66); font-size: 0.9rem; line-height: 1.5; flex: 1; }
@@ -130,12 +132,12 @@
                     <div class="brand-mark">▼</div>
                     <div class="brand-copy">
                         <h1>DowFlow</h1>
-                        <p>Universal Media Experience</p>
+                        <p>Téléchargement vidéo et audio</p>
                     </div>
                 </div>
                 <div class="ffmpeg-status">
-                    <span class="dot" id="ffmpegDot"></span>
-                    <span id="ffmpegText">FFmpeg : vérification...</span>
+                    <span class="dot{% if has_ffmpeg %} online{% endif %}" id="ffmpegDot"></span>
+                    <span id="ffmpegText">FFmpeg : {% if has_ffmpeg %}OK{% else %}non installé{% endif %}</span>
                 </div>
             </header>
 
@@ -150,35 +152,35 @@
 
             <section class="grid">
                 <a class="card available" href="/video">
-                    <div class="card-icon">🎬</div>
+                    <div class="card-index">01</div>
                     <h3>Vidéo</h3>
                     <p>Colle une URL (YouTube, Twitch, TikTok, Instagram, Vimeo…) et télécharge la vidéo ou l'audio, puis lis-la directement.</p>
                     <span class="badge on">Disponible</span>
                 </a>
 
                 <a class="card available" href="/music">
-                    <div class="card-icon">🎵</div>
+                    <div class="card-index">02</div>
                     <h3>Musique</h3>
                     <p>Cherche n'importe quel morceau, parcours les titres populaires, télécharge en MP3/FLAC avec la pochette d'album.</p>
                     <span class="badge on">Disponible</span>
                 </a>
 
                 <a class="card disabled" href="/film">
-                    <div class="card-icon">🍿</div>
+                    <div class="card-index">03</div>
                     <h3>Film / Série</h3>
                     <p>Films et séries complets : pistes audio multiples, sous-titres et gestion des saisons.</p>
                     <span class="badge soon">Bientôt</span>
                 </a>
 
                 <a class="card disabled" href="/anime">
-                    <div class="card-icon">🌸</div>
+                    <div class="card-index">04</div>
                     <h3>Anime / Dessin animé</h3>
                     <p>Animes et dessins animés, VF/VOSTFR, catalogues de diffusion en continu.</p>
                     <span class="badge soon">Bientôt</span>
                 </a>
 
                 <a class="card disabled" href="/image">
-                    <div class="card-icon">📖</div>
+                    <div class="card-index">05</div>
                     <h3>Manhwa / Manga / BD / Image</h3>
                     <p>Chapitres, planches et images : manhwa, manga et bandes dessinées.</p>
                     <span class="badge soon">Bientôt</span>
@@ -193,21 +195,6 @@
     </main>
 
     <script>
-        fetch("/check-ffmpeg")
-            .then((r) => r.json())
-            .then((data) => {
-                const dot = document.getElementById("ffmpegDot");
-                const text = document.getElementById("ffmpegText");
-                if (data.has_ffmpeg) {
-                    dot.classList.add("online");
-                    text.textContent = "FFmpeg : prêt";
-                } else {
-                    text.textContent = "FFmpeg : absent";
-                }
-            })
-            .catch(() => {
-                document.getElementById("ffmpegText").textContent = "FFmpeg : inconnu";
-            });
     </script>
 </body>
 </html>

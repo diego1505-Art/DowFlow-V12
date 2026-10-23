@@ -59,6 +59,17 @@ class MusicHelperTests(unittest.TestCase):
         tracks = [{"id": "1"}, {"id": "2"}, {"id": "1"}]
         self.assertEqual([t["id"] for t in music._dedupe(tracks)], ["1", "2"])
 
+    def test_dedupe_by_title_when_same_track_has_different_ids(self):
+        tracks = [
+            {"id": "id-a", "title": "Imagine Dragons", "artist": "Night Visions"},
+            {"id": "id-b", "title": "Imagine Dragons", "artist": "Night Visions"},
+            {"id": "id-c", "title": "Other Song", "artist": "Artist"},
+        ]
+        deduped = music._dedupe(tracks)
+        self.assertEqual(len(deduped), 2)
+        self.assertEqual(deduped[0]["title"], "Imagine Dragons")
+        self.assertEqual(deduped[1]["title"], "Other Song")
+
 
 class MusicSearchTests(unittest.TestCase):
     def test_search_dedupes_and_limits(self):
@@ -130,6 +141,21 @@ class MusicLibraryTests(unittest.TestCase):
             self.assertEqual(items[0]["title"], "Morceau")
             self.assertIn("Morceau.mp3", items[0]["audio_url"])
             self.assertIsNotNone(items[0]["cover_url"])
+
+    def test_list_library_deduplicates_lyric_and_official_video_versions(self):
+        with tempfile.TemporaryDirectory() as folder:
+            music_dir = Path(folder)
+            (music_dir / "Imagine-Dragons---Demons-Lyrics.mp3").write_bytes(b"audio-one")
+            (music_dir / "Imagine-Dragons---Demons-Official-Music-Video.mp3").write_bytes(b"audio-two")
+            (music_dir / "Imagine-Dragons---Demons-Lyrics.jpg").write_bytes(b"cover-one")
+            (music_dir / "Imagine-Dragons---Demons-Official-Music-Video.jpg").write_bytes(b"cover-two")
+
+            with patch.object(music, "MUSIC_FOLDER", music_dir):
+                items = music.list_library()
+
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]["title"], "Demons")
+        self.assertEqual(items[0]["artist"], "Imagine Dragons")
 
 
 if __name__ == "__main__":

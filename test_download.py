@@ -75,11 +75,11 @@ class DownloadStabilityTests(unittest.TestCase):
                     result = playlist._ydlp_download(
                         "https://www.youtube.com/shorts/12345678901",
                         output_path=output,
+                        quality="720p",
                     )
                     self.assertTrue(Path(result["filepath"]).is_file())
 
-        # Une seule passe : la surveillance adaptative s'appuie sur un hook de
-        # progression, elle ne déclenche plus d'appel yt-dlp supplémentaire.
+        # Une qualité fixe reste compatible avec aria2c.
         self.assertEqual(len(FakeYoutubeDL.instances), 1)
         options = FakeYoutubeDL.instances[-1].options
         self.assertNotIn("writesubtitles", options)
@@ -90,6 +90,60 @@ class DownloadStabilityTests(unittest.TestCase):
         self.assertEqual(options["retries"], 10)
         self.assertEqual(options["fragment_retries"], 10)
         self.assertEqual(options["remote_components"], ["ejs:github"])
+
+    def test_adaptive_download_uses_native_progress_and_retries_lower_quality(self):
+        class AdaptiveYoutubeDL(FakeYoutubeDL):
+            calls = 0
+
+            def extract_info(self, url, download=True):
+                type(self).calls += 1
+                progress_hooks = self.options.get("progress_hooks", [])
+                height = 2160 if type(self).calls == 1 else 1440
+                first = {
+                    "status": "downloading",
+                    "filename": "clip.mp4",
+                    "info_dict": {"width": 2560, "height": height},
+                    "downloaded_bytes": 0,
+                    "total_bytes": 1700 * 1024 * 1024,
+                }
+                second = {
+                    **first,
+                    "downloaded_bytes": (11 if type(self).calls == 1 else 700) * 1024 * 1024,
+                }
+                with patch.object(
+                    playlist.time,
+                    "time",
+                    side_effect=[1000.0, 1011.0],
+                ):
+                    for hook in progress_hooks:
+                        hook(first)
+                    for hook in progress_hooks:
+                        hook(second)
+                output_path = self.options["outtmpl"].replace("%(title).200s.%(ext)s", "clip.mp4")
+                Path(output_path).write_bytes(b"video")
+                return {"title": "clip", "ext": "mp4", "filepath": output_path}
+
+        AdaptiveYoutubeDL.calls = 0
+        with patch.object(playlist.yt_dlp, "YoutubeDL", AdaptiveYoutubeDL):
+            with patch.object(
+                playlist.shutil,
+                "which",
+                side_effect=lambda name: "aria2c.exe" if name == "aria2c" else None,
+            ):
+                with tempfile.TemporaryDirectory() as output:
+                    result = playlist._ydlp_download(
+                        "https://www.youtube.com/watch?v=123",
+                        output_path=output,
+                        quality="best",
+                    )
+
+        self.assertTrue(result["quality_changed"])
+        self.assertEqual(result["quality_used"], "1440p")
+        self.assertEqual(len(AdaptiveYoutubeDL.instances), 2)
+        self.assertNotIn("external_downloader", AdaptiveYoutubeDL.instances[0].options)
+        self.assertEqual(
+            AdaptiveYoutubeDL.instances[1].options["format_sort"], ["res:1440"]
+        )
 
     def test_auto_subtitles_only_request_french(self):
         options = playlist._build_subtitle_lang_options(None)
@@ -208,6 +262,7 @@ class DownloadStabilityTests(unittest.TestCase):
                     result = playlist._ydlp_download(
                         "https://www.instagram.com/reel/example/",
                         output_path=output,
+                        quality="720p",
                     )
                     self.assertTrue(Path(result["filepath"]).is_file())
 
@@ -232,6 +287,26 @@ class DownloadStabilityTests(unittest.TestCase):
         self.assertTrue(options["writeautomaticsub"])
         self.assertEqual(options["subtitlesformat"], "vtt/best")
         self.assertIn("fr", options["subtitleslangs"])
+
+    def test_subtitle_http_429_does_not_fail_video_download(self):
+        class Subtitle429YoutubeDL(FakeYoutubeDL):
+            def _write_subtitles(self, info_dict, filename):
+                raise playlist.yt_dlp.utils.DownloadError("HTTP Error 429: Too Many Requests")
+
+            def extract_info(self, url, download=True):
+                self._write_subtitles({}, "clip.mp4")
+                return super().extract_info(url, download)
+
+        with patch.object(playlist.yt_dlp, "YoutubeDL", Subtitle429YoutubeDL):
+            with tempfile.TemporaryDirectory() as output:
+                result = playlist._ydlp_download(
+                    "https://www.youtube.com/watch?v=123",
+                    output_path=output,
+                    write_subtitles=True,
+                    language="fr",
+                )
+                self.assertTrue(Path(result["filepath"]).is_file(), repr(result))
+        self.assertEqual(len(Subtitle429YoutubeDL.instances), 1)
 
     def test_subtitles_are_converted_to_vtt_when_ffmpeg_available(self):
         with patch.object(playlist, "_resolve_ffmpeg_dir", return_value="/fake/ffmpeg"):
@@ -289,6 +364,33 @@ class DownloadStabilityTests(unittest.TestCase):
         with patch.object(playlist.time, "time", side_effect=[base, base + 11.0]):
             hook(first)
             hook(second)  # doit se terminer sans lever d'exception
+
+    def test_adaptive_watch_hook_resets_for_new_file_and_can_retry(self):
+        hook = playlist._make_adaptive_watch_hook()
+        first = {
+            "status": "downloading",
+            "filename": "video-1.f137.mp4",
+            "info_dict": {"width": 3840, "height": 2160},
+            "downloaded_bytes": 0,
+            "total_bytes": 1000 * 1024 * 1024,
+        }
+        short = {**first, "downloaded_bytes": 700 * 1024 * 1024}
+        second = {
+            "status": "downloading",
+            "filename": "video-2.f137.mp4",
+            "info_dict": {"width": 3840, "height": 2160},
+            "downloaded_bytes": 0,
+            "total_bytes": 1000 * 1024 * 1024,
+        }
+        slow = {**second, "downloaded_bytes": 11 * 1024 * 1024}
+
+        base = 2500.0
+        with patch.object(playlist.time, "time", side_effect=[base, base + 11.0, base + 12.0, base + 23.0, base + 24.0]):
+            hook(first)
+            hook(short)
+            hook(second)
+            with self.assertRaises(playlist._AdaptiveDowngrade):
+                hook(slow)
 
     def test_quality_target_uses_resolution_sort_for_portrait_videos(self):
         selector = playlist._build_video_format_string("240p", "mp4", True, prefer_http=True)

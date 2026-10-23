@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DowFlow - Musique</title>
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
     <style>
         :root {
             --accent: #c96034;
@@ -40,8 +41,8 @@
         .brand { display: flex; align-items: center; gap: 14px; }
         .brand-mark {
             display: grid; place-items: center; width: 44px; height: 44px; border-radius: 14px;
-            background: linear-gradient(135deg, #c96034 0%, #8f3f1d 100%); font-size: 1.2rem;
-            box-shadow: 0 8px 20px rgba(201, 96, 52, 0.35);
+            background: linear-gradient(135deg, #e96b3d, #9c351d); border: 1px solid rgba(255, 161, 112, 0.4);
+            color: #fff2e9; font-size: 1.15rem; font-weight: 800; box-shadow: 0 8px 20px rgba(201, 96, 52, 0.28);
         }
         .brand-copy h1 { font-size: 1.2rem; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; }
         .brand-copy p { color: rgba(255, 255, 255, 0.65); font-size: 0.86rem; }
@@ -111,6 +112,7 @@
         .section-head span { font-size: 0.82rem; color: rgba(255, 255, 255, 0.5); }
 
         .track-list { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); }
+        .library-list { grid-template-columns: 1fr; }
 
         .track {
             display: flex; align-items: center; gap: 14px; padding: 12px; border-radius: var(--radius-md);
@@ -122,6 +124,7 @@
             width: 58px; height: 58px; flex: none; border-radius: 12px; object-fit: cover;
             background: rgba(0, 0, 0, 0.4); display: grid; place-items: center; font-size: 1.4rem;
         }
+        .cover-placeholder { background: linear-gradient(145deg, rgba(201,96,52,0.2), rgba(255,255,255,0.05)); }
         .track .meta { flex: 1; min-width: 0; }
         .track .meta .name { font-weight: 600; font-size: 0.95rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .track .meta .sub { margin-top: 3px; font-size: 0.8rem; color: rgba(255, 255, 255, 0.58); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -136,31 +139,35 @@
         .empty { padding: 22px; border-radius: var(--radius-md); border: 1px dashed var(--line); color: rgba(255, 255, 255, 0.5); font-size: 0.9rem; text-align: center; }
 
         .library-item {
-            display: flex; align-items: center; gap: 14px; padding: 12px; border-radius: var(--radius-md);
+            min-width: 0; border-radius: var(--radius-md); overflow: hidden;
             border: 1px solid var(--line); background: rgba(255, 255, 255, 0.05);
-            transition: transform 0.2s ease, background 0.2s ease;
+            transition: background 0.2s ease;
         }
         .library-item:hover { background: rgba(255, 255, 255, 0.08); }
-        .library-item .cover { width: 58px; height: 58px; flex: none; border-radius: 12px; object-fit: cover; background: rgba(0,0,0,0.4); display: grid; place-items: center; font-size: 1.4rem; }
-        .library-item .meta { flex: 1; min-width: 0; overflow: hidden; }
-        
-        /* Effet Marquee pour les titres longs */
-        .marquee-container { overflow: hidden; white-space: nowrap; width: 100%; }
-        .marquee-text { display: inline-block; padding-left: 0; transition: transform 0.3s ease; }
-        .library-item:hover .marquee-text.should-scroll {
-            animation: marquee 8s linear infinite;
+        .track-summary {
+            display: flex; align-items: center; gap: 14px; width: 100%; padding: 12px;
+            border: 0; color: inherit; background: transparent; text-align: left; cursor: pointer;
         }
-        @keyframes marquee {
-            0% { transform: translateX(0); }
-            10% { transform: translateX(0); }
-            90% { transform: translateX(calc(-100% + 200px)); }
-            100% { transform: translateX(calc(-100% + 200px)); }
+        .track-summary:focus-visible { outline: 2px solid var(--accent); outline-offset: -3px; }
+        .track-summary .cover { width: 54px; height: 54px; flex: none; border-radius: 8px; object-fit: cover; background: rgba(0,0,0,0.4); display: grid; place-items: center; font-size: 1.4rem; }
+        .track-summary .meta { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+        .track-summary .track-title {
+            font-weight: 700; font-size: 0.96rem; line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
         }
-
-        .library-item .meta .name { font-weight: 600; font-size: 0.95rem; }
-        .library-item .meta .sub { margin-top: 3px; font-size: 0.78rem; color: rgba(255, 255, 255, 0.55); }
-        .library-item audio { height: 38px; max-width: 200px; flex: none; }
-        
+        .track-summary .track-artist {
+            font-size: 0.78rem; color: rgba(255,255,255,0.62); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .track-progress { height: 4px; margin-top: 4px; border-radius: 999px; overflow: hidden; background: rgba(255,255,255,0.18); }
+        .track-progress-fill { display: block; width: 0; height: 100%; border-radius: inherit; background: var(--accent); }
+        .track-details {
+            display: none; align-items: center; gap: 12px; padding: 0 12px 12px 80px;
+        }
+        .library-item.open .track-details { display: flex; }
+        .track-details audio { flex: 1; min-width: 0; width: 100%; height: 38px; }
+        .track-details .mini-meta { font-size: 0.72rem; color: rgba(255,255,255,0.58); white-space: nowrap; }
+        @media (max-width: 560px) {
+            .track-details { padding-left: 12px; }
+        }
         .btn-delete {
             width: 38px; height: 38px; border-radius: 10px; border: 1px solid rgba(255, 70, 70, 0.2);
             background: rgba(255, 70, 70, 0.1); color: #ff8585; display: grid; place-items: center;
@@ -194,7 +201,7 @@
         <section class="shell">
             <header class="topbar">
                 <div class="brand">
-                    <div class="brand-mark">🎵</div>
+                    <div class="brand-mark">▼</div>
                     <div class="brand-copy">
                         <h1>DowFlow Music</h1>
                         <p>Recherche · Téléchargement · Bibliothèque</p>
@@ -202,8 +209,8 @@
                 </div>
                 <div class="topbar-right">
                     <div class="ffmpeg-status">
-                        <span class="dot" id="ffmpegDot"></span>
-                        <span id="ffmpegText">FFmpeg : vérification...</span>
+                        <span class="dot{% if has_ffmpeg %} online{% endif %}" id="ffmpegDot"></span>
+                        <span id="ffmpegText">FFmpeg : {% if has_ffmpeg %}OK{% else %}non installé{% endif %}</span>
                     </div>
                     <a class="back-link" href="/">← Menu</a>
                 </div>
@@ -271,7 +278,7 @@
                     <h3>Ma musique</h3>
                     <span id="libraryCount"></span>
                 </div>
-                <div class="track-list" id="libraryList">
+                <div class="track-list library-list" id="libraryList">
                     <div class="empty">Aucun morceau téléchargé pour l'instant.</div>
                 </div>
             </section>
@@ -334,6 +341,7 @@
 
         async function pollJob(jobId) {
             const started = Date.now();
+            const pollMs = 2000;
             while (Date.now() - started < 60 * 60 * 1000) {
                 const res = await fetch(`/jobs/${jobId}`);
                 const payload = await res.json();
@@ -345,7 +353,7 @@
                 setProgress(pct);
                 setStatus(`Téléchargement ${pct.toFixed(0)}%`, "");
                 if (["success", "failed", "skipped"].includes(job.status)) return job;
-                await sleep(500);
+                await sleep(pollMs);
             }
             throw new Error("Téléchargement trop long (timeout)");
         }
@@ -355,7 +363,7 @@
             card.className = "track";
             const thumb = track.thumbnail
                 ? `<img class="cover" src="${escapeHtml(track.thumbnail)}" alt="" loading="lazy">`
-                : `<div class="cover">🎵</div>`;
+                : `<div class="cover cover-placeholder" aria-hidden="true"></div>`;
             const duration = formatDuration(track.duration);
             const sub = [track.artist, duration].filter(Boolean).map(escapeHtml).join(" · ");
             card.innerHTML = `
@@ -446,29 +454,56 @@
                     el.dataset.filename = item.filename;
                     const cover = item.cover_url
                         ? `<img class="cover" src="${escapeHtml(item.cover_url)}" alt="" loading="lazy">`
-                        : `<div class="cover">🎵</div>`;
+                        : `<div class="cover cover-placeholder" aria-hidden="true"></div>`;
                     el.innerHTML = `
-                        ${cover}
-                        <div class="meta">
-                            <div class="marquee-container">
-                                <div class="marquee-text name">${escapeHtml(item.title)}</div>
-                            </div>
-                            <div class="sub">${escapeHtml(formatSize(item.size))}</div>
+                        <button class="track-summary" type="button" aria-expanded="false">
+                            ${cover}
+                            <span class="meta">
+                                <span class="track-title">${escapeHtml(item.title)}</span>
+                                <span class="track-artist">${escapeHtml(item.artist || "")}</span>
+                                <span class="track-progress" role="progressbar" aria-label="Progression du morceau" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span class="track-progress-fill"></span></span>
+                            </span>
+                        </button>
+                        <div class="track-details">
+                            <audio controls preload="none" src="${escapeHtml(item.audio_url)}"></audio>
+                            <span class="mini-meta">${escapeHtml(formatSize(item.size))}</span>
+                            <button class="btn-delete" title="Supprimer" aria-label="Supprimer ce morceau">✕</button>
                         </div>
-                        <audio controls preload="none" src="${escapeHtml(item.audio_url)}"></audio>
-                        <button class="btn-delete" title="Supprimer">✕</button>
                     `;
-                    
+
                     const audio = el.querySelector("audio");
+                    const summary = el.querySelector(".track-summary");
+                    const progress = el.querySelector(".track-progress");
+                    const progressFill = el.querySelector(".track-progress-fill");
                     const deleteBtn = el.querySelector(".btn-delete");
-                    const marqueeText = el.querySelector(".marquee-text");
-                    
+
+                    summary.addEventListener("click", () => {
+                        const shouldOpen = !el.classList.contains("open");
+                        libraryList.querySelectorAll(".library-item.open").forEach(openItem => {
+                            openItem.classList.remove("open");
+                            openItem.querySelector(".track-summary").setAttribute("aria-expanded", "false");
+                            openItem.querySelector("audio").pause();
+                        });
+                        if (shouldOpen) {
+                            el.classList.add("open");
+                            summary.setAttribute("aria-expanded", "true");
+                        }
+                    });
+
+                    audio.addEventListener("timeupdate", () => {
+                        const percent = audio.duration ? (audio.currentTime / audio.duration) * 100 : 0;
+                        progressFill.style.width = `${percent}%`;
+                        progress.setAttribute("aria-valuenow", String(Math.round(percent)));
+                    });
+
                     // Auto-play next
                     audio.addEventListener("ended", () => {
                         const nextItem = libraryList.children[index + 1];
                         if (nextItem) {
                             const nextAudio = nextItem.querySelector("audio");
                             if (nextAudio) {
+                                nextItem.classList.add("open");
+                                nextItem.querySelector(".track-summary").setAttribute("aria-expanded", "true");
                                 nextAudio.play();
                                 nextItem.scrollIntoView({ behavior: 'smooth', block: 'center' });
                             }
@@ -496,13 +531,6 @@
                             alert("Erreur réseau");
                         }
                     });
-
-                    // Check if marquee is needed
-                    setTimeout(() => {
-                        if (marqueeText.scrollWidth > marqueeText.clientWidth) {
-                            marqueeText.classList.add("should-scroll");
-                        }
-                    }, 100);
 
                     libraryList.appendChild(el);
                 });
@@ -535,16 +563,6 @@
                 searchBtn.disabled = false;
             }
         });
-
-        fetch("/check-ffmpeg")
-            .then((r) => r.json())
-            .then((data) => {
-                const dot = document.getElementById("ffmpegDot");
-                const text = document.getElementById("ffmpegText");
-                if (data.has_ffmpeg) { dot.classList.add("online"); text.textContent = "FFmpeg : prêt"; }
-                else { text.textContent = "FFmpeg : absent"; }
-            })
-            .catch(() => { document.getElementById("ffmpegText").textContent = "FFmpeg : inconnu"; });
 
         loadPopular();
         loadLibrary();

@@ -1,15 +1,32 @@
 @echo off
-title DowFlow
+chcp 65001 >nul 2>&1
+title DowFlow - Media Downloader
 cd /d "%~dp0"
 
 REM ── Venv ────────────────────────────────────────────────────────────────
-if exist ".venv\Scripts\activate.bat" (
-    call .venv\Scripts\activate.bat
-) else (
+REM Chemin absolu recalcule a chaque lancement : le venv reste valide meme si
+REM le dossier du projet est renomme/deplace (sinon activation cassee -> Python
+REM systeme + yt-dlp trop ancien -> erreurs HTTP 403 sur YouTube).
+set "VENV_DIR=%~dp0.venv"
+if not exist "%VENV_DIR%\Scripts\python.exe" (
     echo Creation du venv...
-    python -m venv .venv
-    call .venv\Scripts\activate.bat
-    pip install -r requirements.txt
+    python -m venv "%VENV_DIR%"
+    "%VENV_DIR%\Scripts\python.exe" -m pip install -r requirements.txt
+)
+set "VIRTUAL_ENV=%VENV_DIR%"
+set "PATH=%VENV_DIR%\Scripts;%PATH%"
+
+REM ── Ecran de demarrage anime ────────────────────────────────────────────
+python -c "import rich" >nul 2>&1
+if errorlevel 1 (
+    echo [INFO] Installation de Rich pour l'ecran de demarrage...
+    python -m pip install "rich>=13.7.1,<16"
+)
+python -c "import rich" >nul 2>&1
+if not errorlevel 1 (
+    python startup.py
+) else (
+    echo [INFO] Animation indisponible; demarrage de DowFlow.
 )
 
 REM ── Playwright / Chromium : verifier a chaque lancement ──────────────────

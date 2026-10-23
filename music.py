@@ -11,7 +11,10 @@ s'il est disponible il est interrogé en premier, sinon tout passe par YouTube.
 from __future__ import annotations
 
 import os
+import re
 import time
+import unicodedata
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 from urllib.parse import quote, urlparse
 
@@ -29,6 +32,11 @@ MUSIC_FOLDER = DOWNLOAD_FOLDER / MUSIC_SUBFOLDER
 
 COVER_EXTENSIONS = (".jpg", ".jpeg", ".png", ".webp")
 DEEZER_SEARCH_URL = "https://api.deezer.com/search"
+_LIBRARY_PROMO_SUFFIX = re.compile(
+    r"[-_\s]*(?:official[-_\s]+(?:music[-_\s]+)?video|official[-_\s]+audio|"
+    r"lyrics?(?:[-_\s]+video)?|lyric[-_\s]+video|music[-_\s]+video|audio)$",
+    re.IGNORECASE,
+)
 
 # Requêtes servant à composer la liste « Musiques populaires » (sans dataset).
 _POPULAR_QUERIES = (
@@ -71,6 +79,23 @@ def _video_id_from_url(url: str) -> str | None:
     return None
 
 
+def _library_track_metadata(stem: str) -> tuple[str, str, str]:
+    """Nettoie un nom YouTube et produit une clé stable artiste/titre."""
+    raw_artist = ""
+    raw_title = stem.strip()
+    if "---" in raw_title:
+        raw_artist, raw_title = raw_title.split("---", 1)
+        raw_artist = re.sub(r"[-_]+", " ", raw_artist).strip()
+
+    raw_title = _LIBRARY_PROMO_SUFFIX.sub("", raw_title).strip(" -_[]()")
+    title = re.sub(r"[-_]+", " ", raw_title).strip()
+    normalized = unicodedata.normalize(
+        "NFKD", f"{raw_artist} {title}"
+    ).encode("ascii", "ignore").decode("ascii").lower()
+    key = re.sub(r"[^a-z0-9]+", " ", normalized).strip()
+    return raw_artist, title, key
+
+
 def _normalize_entry(entry: dict[str, Any]) -> dict[str, Any] | None:
     """Convertit une entrée yt-dlp (flat) en piste exploitable par le frontend."""
     if not isinstance(entry, dict):
@@ -96,12 +121,34 @@ def _normalize_entry(entry: dict[str, Any]) -> dict[str, Any] | None:
 
 
 def _dedupe(tracks: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    seen: set[str] = set()
+    seen_ids: set[str] = set()
+    seen_keys: set[str] = set()
     out: list[dict[str, Any]] = []
     for track in tracks:
-        if track["id"] in seen:
+        title = (track.get("title") or "").strip()
+        artist = (track.get("artist") or "").strip()
+        track_id = (track.get("id") or "").strip()
+
+        if track_id and track_id.lower() in seen_ids:
             continue
-        seen.add(track["id"])
+
+        if title and artist:
+            key = f"{title}|{artist}"
+        elif title:
+            key = title
+        elif track_id:
+            key = track_id
+        else:
+            continue
+
+        norm = "".join(
+            ch for ch in key.lower() if ch.isalnum() or ch in {" ", "-", "_", "|"}
+        )
+        if norm in seen_keys:
+            continue
+        seen_keys.add(norm)
+        if track_id:
+            seen_ids.add(track_id.lower())
         out.append(track)
     return out
 
@@ -176,11 +223,19 @@ def popular_music(limit: int = 24) -> list[dict[str, Any]]:
 
     per_query = max(6, (limit // len(_POPULAR_QUERIES)) + 4)
     tracks: list[dict[str, Any]] = []
-    for query in _POPULAR_QUERIES:
-        try:
-            tracks.extend(_search_youtube(query, per_query))
-        except Exception as exc:
-            log.warning("[music] Requête populaire « %s » échouée : %s", query, exc)
+    # Les requêtes YouTube sont indépendantes : on les lance en parallèle pour réduire
+    # la latence à froid (l'opération la plus lente de l'endpoint /popular).
+    with ThreadPoolExecutor(max_workers=len(_POPULAR_QUERIES)) as pool:
+        futures = {
+            pool.submit(_search_youtube, query, per_query): query
+            for query in _POPULAR_QUERIES
+        }
+        for future in as_completed(futures):
+            query = futures[future]
+            try:
+                tracks.extend(future.result())
+            except Exception as exc:
+                log.warning("[music] Requête populaire « %s » échouée : %s", query, exc)
 
     tracks = _dedupe(tracks)[:limit]
     if tracks:
@@ -278,14 +333,20 @@ def download_music_track(
     )
 
     filepath = result.get("filepath")
-    if with_cover and filepath and os.path.isfile(filepath):
+    cover_source = fetch_cover_url(artist, title or result.get("title"))
+    if cover_source:
+        result["cover_url"] = cover_source
+
+    if filepath and os.path.isfile(filepath):
         video_id = _video_id_from_url(url)
-        cover_source = fetch_cover_url(artist, title or result.get("title"))
-        cover_path = _save_cover_image(filepath, cover_source, video_id)
-        if cover_path:
-            cover_relative = os.path.relpath(cover_path, base_output).replace("\\", "/")
-            result["cover_path"] = cover_path
-            result["cover_url"] = f"/media/{cover_relative}"
+        if with_cover:
+            cover_path = _save_cover_image(filepath, cover_source, video_id)
+            if cover_path:
+                cover_relative = os.path.relpath(cover_path, base_output).replace("\\", "/")
+                result["cover_path"] = cover_path
+                result["cover_url"] = f"/media/{cover_relative}"
+        elif not result.get("cover_path") and cover_source:
+            result["cover_path"] = cover_source
 
     return result
 
@@ -302,25 +363,38 @@ def list_library(limit: int = 200) -> list[dict[str, Any]]:
     except OSError:
         return []
 
+    entries.sort(key=lambda path: path.stat().st_mtime, reverse=True)
     items: list[dict[str, Any]] = []
+    seen: set[str] = set()
     for path in entries:
         if path.suffix.lower() not in AUDIO_EXTENSIONS:
             continue
+        artist, title, title_key = _library_track_metadata(path.stem)
+        if title_key in seen:
+            continue
+        seen.add(title_key)
+
         cover_name = None
         for ext in COVER_EXTENSIONS:
             candidate = MUSIC_FOLDER / f"{path.stem}{ext}"
             if candidate.is_file():
                 cover_name = candidate.name
                 break
+
+        cover_url = (
+            f"/media/{MUSIC_SUBFOLDER}/{quote(cover_name)}" if cover_name else None
+        )
+        if not cover_url:
+            cover_url = fetch_cover_url(None, path.stem)
+
         stat = path.stat()
         items.append(
             {
                 "filename": path.name,
-                "title": path.stem,
+                "title": title or path.stem,
+                "artist": artist,
                 "audio_url": f"/media/{MUSIC_SUBFOLDER}/{quote(path.name)}",
-                "cover_url": (
-                    f"/media/{MUSIC_SUBFOLDER}/{quote(cover_name)}" if cover_name else None
-                ),
+                "cover_url": cover_url,
                 "size": stat.st_size,
                 "mtime": stat.st_mtime,
             }
