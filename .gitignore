@@ -42,3 +42,4 @@ logs/
 dowflow.db
 *.db-wal
 *.db-shm
+dowflow_menu.json

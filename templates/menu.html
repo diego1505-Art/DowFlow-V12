@@ -44,6 +44,7 @@
 
         .topbar {
             display: flex; align-items: center; justify-content: space-between; gap: 20px;
+            flex-wrap: wrap;
             padding: 24px 34px;
             border-bottom: 1px solid rgba(255, 255, 255, 0.1);
             background: rgba(0, 0, 0, 0.2);
@@ -115,6 +116,15 @@
             background: rgba(0, 0, 0, 0.2); color: rgba(255, 255, 255, 0.55); font-size: 0.84rem;
         }
         .footer a { color: inherit; opacity: 0.8; }
+        .menu-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+        .action-button { border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; color: #fff; background: rgba(255, 255, 255, 0.1); cursor: pointer; font: inherit; font-size: 0.84rem; }
+        .action-button:hover { background: rgba(201, 96, 52, 0.25); border-color: rgba(201, 96, 52, 0.6); }
+        dialog { max-width: 440px; width: calc(100% - 32px); border: 1px solid #675044; border-radius: 18px; padding: 24px; color: #fff; background: #211914; }
+        dialog::backdrop { background: rgba(0, 0, 0, 0.7); }
+        dialog h2 { margin-bottom: 16px; font-size: 1.2rem; }
+        dialog label { display: block; margin: 14px 0 6px; color: rgba(255, 255, 255, 0.7); font-size: 0.85rem; }
+        dialog input, dialog select { width: 100%; border: 1px solid #675044; border-radius: 10px; padding: 10px; color: #fff; background: #120e0b; font: inherit; }
+        .dialog-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 22px; }
     </style>
 </head>
 <body>
@@ -131,13 +141,17 @@
                 <div class="brand">
                     <div class="brand-mark">▼</div>
                     <div class="brand-copy">
-                        <h1>DowFlow</h1>
-                        <p>Téléchargement vidéo et audio</p>
+                        <h1 id="menuTitle">{{ menu.name }}</h1>
+                        <p>{{ menu.description }}</p>
                     </div>
                 </div>
                 <div class="ffmpeg-status">
                     <span class="dot{% if has_ffmpeg %} online{% endif %}" id="ffmpegDot"></span>
                     <span id="ffmpegText">FFmpeg : {% if has_ffmpeg %}OK{% else %}non installé{% endif %}</span>
+                </div>
+                <div class="menu-actions">
+                    <button class="action-button" type="button" id="renameButton">Renommer</button>
+                    <button class="action-button" type="button" id="exportButton">Exporter</button>
                 </div>
             </header>
 
@@ -151,40 +165,14 @@
             </section>
 
             <section class="grid">
-                <a class="card available" href="/video">
-                    <div class="card-index">01</div>
-                    <h3>Vidéo</h3>
-                    <p>Colle une URL (YouTube, Twitch, TikTok, Instagram, Vimeo…) et télécharge la vidéo ou l'audio, puis lis-la directement.</p>
-                    <span class="badge on">Disponible</span>
+                {% for item in menu["items"] %}
+                <a class="card {{ 'available' if item.available else 'disabled' }}" href="{{ item.href }}" data-menu-id="{{ item.id }}">
+                    <div class="card-index">{{ "%02d"|format(loop.index) }}</div>
+                    <h3>{{ item.label }}</h3>
+                    <p>{{ item.description }}</p>
+                    <span class="badge {{ 'on' if item.available else 'soon' }}">{{ 'Disponible' if item.available else 'Bientôt' }}</span>
                 </a>
-
-                <a class="card available" href="/music">
-                    <div class="card-index">02</div>
-                    <h3>Musique</h3>
-                    <p>Cherche n'importe quel morceau, parcours les titres populaires, télécharge en MP3/FLAC avec la pochette d'album.</p>
-                    <span class="badge on">Disponible</span>
-                </a>
-
-                <a class="card disabled" href="/film">
-                    <div class="card-index">03</div>
-                    <h3>Film / Série</h3>
-                    <p>Films et séries complets : pistes audio multiples, sous-titres et gestion des saisons.</p>
-                    <span class="badge soon">Bientôt</span>
-                </a>
-
-                <a class="card disabled" href="/anime">
-                    <div class="card-index">04</div>
-                    <h3>Anime / Dessin animé</h3>
-                    <p>Animes et dessins animés, VF/VOSTFR, catalogues de diffusion en continu.</p>
-                    <span class="badge soon">Bientôt</span>
-                </a>
-
-                <a class="card disabled" href="/image">
-                    <div class="card-index">05</div>
-                    <h3>Manhwa / Manga / BD / Image</h3>
-                    <p>Chapitres, planches et images : manhwa, manga et bandes dessinées.</p>
-                    <span class="badge soon">Bientôt</span>
-                </a>
+                {% endfor %}
             </section>
 
             <footer class="footer">
@@ -194,7 +182,66 @@
         </section>
     </main>
 
+    <dialog id="menuDialog">
+        <form method="dialog" id="menuForm">
+            <h2 id="dialogTitle">Exporter le menu</h2>
+            <label for="menuScope">Élément à traiter</label>
+            <select id="menuScope">
+                <option value="root">Menu entier</option>
+                {% for item in menu["items"] %}
+                <option value="{{ item.id }}">{{ item.label }}</option>
+                {% endfor %}
+            </select>
+            <label for="menuName">Nom</label>
+            <input id="menuName" maxlength="120" value="{{ menu.name }}" required>
+            <div class="dialog-actions">
+                <button class="action-button" value="cancel">Annuler</button>
+                <button class="action-button" id="dialogSubmit" value="default">Exporter</button>
+            </div>
+        </form>
+    </dialog>
     <script>
+        const dialog = document.getElementById('menuDialog');
+        const scope = document.getElementById('menuScope');
+        const nameInput = document.getElementById('menuName');
+        const form = document.getElementById('menuForm');
+        const submit = document.getElementById('dialogSubmit');
+        let mode = 'export';
+        const rootName = {{ menu.name|tojson }};
+
+        function openMenuDialog(nextMode) {
+            mode = nextMode;
+            document.getElementById('dialogTitle').textContent = mode === 'rename' ? 'Renommer un menu' : 'Exporter le menu';
+            submit.textContent = mode === 'rename' ? 'Enregistrer' : 'Exporter';
+            scope.value = 'root';
+            nameInput.value = rootName;
+            dialog.showModal();
+        }
+
+        document.getElementById('exportButton').addEventListener('click', () => openMenuDialog('export'));
+        document.getElementById('renameButton').addEventListener('click', () => openMenuDialog('rename'));
+        scope.addEventListener('change', () => {
+            if (mode === 'export') return;
+            nameInput.value = scope.value === 'root' ? rootName : scope.options[scope.selectedIndex].textContent;
+        });
+        form.addEventListener('submit', async (event) => {
+            if (event.submitter?.value === 'cancel') return;
+            event.preventDefault();
+            const id = scope.value;
+            const label = nameInput.value.trim();
+            if (!label) return;
+            if (mode === 'export') {
+                window.location.href = `/api/menu/export?id=${encodeURIComponent(id)}&name=${encodeURIComponent(label)}`;
+                dialog.close();
+                return;
+            }
+            const response = await fetch('/api/menu/rename', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({id, label})
+            });
+            if (response.ok) window.location.reload();
+        });
     </script>
 </body>
 </html>

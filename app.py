@@ -20,6 +20,7 @@ from playlist import download_media, get_frontend_config
 from logger import get_logger
 from jobs import start_download_job, get_job, list_jobs
 from database import download_list, download_count_by_status
+from menu_config import export_menu, load_menu, rename_menu
 import music
 
 log = get_logger("app")
@@ -95,7 +96,42 @@ def register_local_media(source_path: Path) -> dict[str, str]:
 @app.route("/")
 def index():
     """Grand menu : choix du type de telechargement."""
-    return render_template("menu.html", has_ffmpeg=has_ffmpeg())
+    return render_template("menu.html", has_ffmpeg=has_ffmpeg(), menu=load_menu())
+
+
+@app.get("/api/menu")
+def menu_config_api():
+    return jsonify(load_menu())
+
+
+@app.post("/api/menu/rename")
+def rename_menu_api():
+    payload = request.get_json(silent=True) or {}
+    menu_id = str(payload.get("id", "")).strip()
+    label = str(payload.get("label", "")).strip()
+    if not menu_id or not label:
+        return jsonify({"success": False, "error": "Un identifiant et un nom sont requis."}), 400
+    try:
+        return jsonify({"success": True, "menu": rename_menu(menu_id, label)})
+    except KeyError:
+        return jsonify({"success": False, "error": "Ce menu n'existe pas."}), 404
+
+
+@app.get("/api/menu/export")
+def export_menu_api():
+    menu_id = request.args.get("id", "root").strip()
+    requested_name = request.args.get("name", "").strip()
+    try:
+        payload = export_menu(menu_id)
+    except KeyError:
+        return jsonify({"success": False, "error": "Ce menu n'existe pas."}), 404
+    if requested_name:
+        payload["name"] = requested_name[:120]
+    filename = secure_filename(payload["name"]) or "dowflow-menu"
+    response = jsonify(payload)
+    response.headers["Content-Disposition"] = f'attachment; filename="{filename}.json"'
+    response.headers["Content-Type"] = "application/json; charset=utf-8"
+    return response
 
 
 @app.route("/video")
