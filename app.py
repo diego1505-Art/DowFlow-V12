@@ -20,7 +20,7 @@ from playlist import download_media, get_frontend_config
 from logger import get_logger
 from jobs import start_download_job, get_job, list_jobs
 from database import download_list, download_count_by_status
-from menu_config import load_menu
+from menu_config import load_menu, rename_menu
 import music
 
 log = get_logger("app")
