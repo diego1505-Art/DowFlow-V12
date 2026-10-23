@@ -122,7 +122,7 @@ npm run electron
 Pour préparer un installateur Windows :
 
 ```powershell
-npm run electron:dist
+.\build-desktop.ps1
 ```
 
-Le shell Electron démarre le serveur Flask local. Pour un installateur totalement autonome, il faudra ensuite embarquer un runtime Python et les dépendances Flask avec PyInstaller. Electron ne produit pas directement un APK Android ; cette cible nécessitera Capacitor ou un projet Android séparé.
+Le script embarque le serveur Flask avec PyInstaller, puis le lanceur Electron dans l’installateur. Le `.exe` produit peut donc démarrer DowFlow sans Python séparé. Electron ne produit pas directement un APK Android ; cette cible nécessitera Capacitor ou un projet Android séparé.

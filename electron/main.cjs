@@ -6,9 +6,12 @@ const serverUrl = "http://127.0.0.1:5001";
 let serverProcess;
 
 function startFlask() {
-    const python = process.env.DOWFLOW_PYTHON || (process.platform === "win32" ? "python" : "python3");
-    serverProcess = spawn(python, ["app.py"], {
-        cwd: app.isPackaged ? path.join(process.resourcesPath, "dowflow") : path.resolve(__dirname, ".."),
+    const projectRoot = path.resolve(__dirname, "..");
+    const packagedBackend = path.join(process.resourcesPath, "DowFlowServer", process.platform === "win32" ? "DowFlowServer.exe" : "DowFlowServer");
+    const command = app.isPackaged ? packagedBackend : (process.env.DOWFLOW_PYTHON || (process.platform === "win32" ? "python" : "python3"));
+    const args = app.isPackaged ? [] : ["app.py"];
+    serverProcess = spawn(command, args, {
+        cwd: app.isPackaged ? path.join(process.resourcesPath, "dowflow") : projectRoot,
         env: { ...process.env, DOWFLOW_HOST: "127.0.0.1" },
         stdio: "ignore",
         windowsHide: true,
