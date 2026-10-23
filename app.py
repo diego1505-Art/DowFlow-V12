@@ -1,4 +1,5 @@
 import os
+import threading
 import time
 import uuid
 from pathlib import Path
@@ -44,6 +45,8 @@ COMING_SOON_CATEGORIES: dict[str, tuple[str, str]] = {
 }
 
 LOCAL_MEDIA_REGISTRY: dict[str, tuple[Path, float]] = {}
+# Verrou (reentrant) : le registre est partage entre les threads Flask.
+_LOCAL_MEDIA_LOCK = threading.RLock()
 DEBUG_MODE = os.environ.get("DOWFLOW_DEBUG", "").strip().lower() in {"1", "true", "yes", "on"}
 if DEBUG_MODE:
     log.info("Mode DOWFLOW_DEBUG actif (logs console DEBUG)")
@@ -54,31 +57,34 @@ def is_allowed_local_file(path: Path) -> bool:
 
 
 def cleanup_local_media_registry() -> None:
-    now = time.time()
-    expired_tokens = [
-        token
-        for token, (_, created_at) in LOCAL_MEDIA_REGISTRY.items()
-        if now - created_at > LOCAL_MEDIA_TTL_SECONDS
-    ]
-    for token in expired_tokens:
-        LOCAL_MEDIA_REGISTRY.pop(token, None)
+    # Appelable seul ou depuis register/serve (deja verrouilles) : RLock autorise la reentrance.
+    with _LOCAL_MEDIA_LOCK:
+        now = time.time()
+        expired_tokens = [
+            token
+            for token, (_, created_at) in list(LOCAL_MEDIA_REGISTRY.items())
+            if now - created_at > LOCAL_MEDIA_TTL_SECONDS
+        ]
+        for token in expired_tokens:
+            LOCAL_MEDIA_REGISTRY.pop(token, None)
 
-    if len(LOCAL_MEDIA_REGISTRY) <= LOCAL_MEDIA_MAX_ENTRIES:
-        return
+        if len(LOCAL_MEDIA_REGISTRY) <= LOCAL_MEDIA_MAX_ENTRIES:
+            return
 
-    tokens_by_age = sorted(
-        LOCAL_MEDIA_REGISTRY.items(),
-        key=lambda item: item[1][1],
-    )
-    overflow = len(LOCAL_MEDIA_REGISTRY) - LOCAL_MEDIA_MAX_ENTRIES
-    for token, _ in tokens_by_age[:overflow]:
-        LOCAL_MEDIA_REGISTRY.pop(token, None)
+        tokens_by_age = sorted(
+            LOCAL_MEDIA_REGISTRY.items(),
+            key=lambda item: item[1][1],
+        )
+        overflow = len(LOCAL_MEDIA_REGISTRY) - LOCAL_MEDIA_MAX_ENTRIES
+        for token, _ in tokens_by_age[:overflow]:
+            LOCAL_MEDIA_REGISTRY.pop(token, None)
 
 
 def register_local_media(source_path: Path) -> dict[str, str]:
     cleanup_local_media_registry()
     token = uuid.uuid4().hex
-    LOCAL_MEDIA_REGISTRY[token] = (source_path.resolve(), time.time())
+    with _LOCAL_MEDIA_LOCK:
+        LOCAL_MEDIA_REGISTRY[token] = (source_path.resolve(), time.time())
     return {
         "filename": source_path.name,
         "filepath": str(source_path),
@@ -306,14 +312,15 @@ def serve_media(filename: str):
 @app.route("/media-local/<token>")
 def serve_local_media(token: str):
     cleanup_local_media_registry()
-    entry = LOCAL_MEDIA_REGISTRY.get(token)
-    if entry is None:
-        abort(404)
-    source_path, _ = entry
-    if not source_path.is_file():
-        LOCAL_MEDIA_REGISTRY.pop(token, None)
-        abort(404)
-    LOCAL_MEDIA_REGISTRY[token] = (source_path, time.time())
+    with _LOCAL_MEDIA_LOCK:
+        entry = LOCAL_MEDIA_REGISTRY.get(token)
+        if entry is None:
+            abort(404)
+        source_path, _ = entry
+        if not source_path.is_file():
+            LOCAL_MEDIA_REGISTRY.pop(token, None)
+            abort(404)
+        LOCAL_MEDIA_REGISTRY[token] = (source_path, time.time())
     return send_file(source_path, as_attachment=False)
 
 
@@ -558,13 +565,15 @@ if __name__ == "__main__":
 
     # Analyse rapide du réseau au lancement
     try:
-        from playlist import _measure_network_speed_mbps
+        from playlist import _measure_network_speed_mbps, detect_connection_tier
         log.info("Analyse du réseau au démarrage...")
         speed = _measure_network_speed_mbps()
         if speed > 0:
             log.success("Débit détecté : %.2f Mbps", speed)
         else:
             log.warning("Débit non détecté (vérifiez votre connexion).")
+        # Palier de connexions (8/16/32/64/128) selon la puissance du PC et le débit.
+        detect_connection_tier(speed)
     except Exception:
         pass
 

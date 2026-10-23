@@ -49,15 +49,15 @@ L'espace Musique (`/music`) permet de :
 
 ##  Architecture du Projet
 
-- **[app.py](file:///c:/Users/diego/Documents/download-video-youtube-V9-main/app.py)** : Serveur Flask, routes API et gestion des jobs.
-- **[playlist.py](file:///c:/Users/diego/Documents/download-video-youtube-V9-main/playlist.py)** : Cœur logique des téléchargements vidéo.
-- **[music.py](file:///c:/Users/diego/Documents/download-video-youtube-V9-main/music.py)** : Service dédié à la recherche et à la gestion musicale.
-- **[music_dataset.py](file:///c:/Users/diego/Documents/download-video-youtube-V9-main/music_dataset.py)** : Interface pour le catalogue musical local.
-- **[templates/](file:///c:/Users/diego/Documents/download-video-youtube-V9-main/templates)** : 
+- **[app.py](file:///c:/Users/diego/Documents/DowFlow-V11/app.py)** : Serveur Flask, routes API et gestion des jobs.
+- **[playlist.py](file:///c:/Users/diego/Documents/DowFlow-V11/playlist.py)** : Cœur logique des téléchargements vidéo.
+- **[music.py](file:///c:/Users/diego/Documents/DowFlow-V11/music.py)** : Service dédié à la recherche et à la gestion musicale.
+- **[music_dataset.py](file:///c:/Users/diego/Documents/DowFlow-V11/music_dataset.py)** : Interface pour le catalogue musical local.
+- **[templates/](file:///c:/Users/diego/Documents/DowFlow-V11/templates)** : 
     - `menu.html` : Accueil DowFlow.
     - `dowload.html` : Espace Vidéo universel.
     - `music.html` : Espace Musique complet.
-- **[test_music.py](file:///c:/Users/diego/Documents/download-video-youtube-V9-main/test_music.py)** : Tests spécifiques au workflow musical.
+- **[test_music.py](file:///c:/Users/diego/Documents/DowFlow-V11/test_music.py)** : Tests spécifiques au workflow musical.
 
 ---
 

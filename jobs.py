@@ -154,9 +154,10 @@ def start_download_job(download_fn: Callable[..., dict[str, Any]], url: str, **k
             kwargs_with_hook = dict(kwargs)
             kwargs_with_hook["progress_hook"] = make_progress_hook(job_id)
             result = download_fn(url, **kwargs_with_hook)
-            safe = sanitize_job_result(result if isinstance(result, dict) else None)
-            filepath = (safe or {}).get("filepath") or (result or {}).get("filepath")
-            if result.get("skipped"):
+            result_dict = result if isinstance(result, dict) else {}
+            safe = sanitize_job_result(result_dict or None)
+            filepath = (safe or {}).get("filepath") or result_dict.get("filepath")
+            if result_dict.get("skipped"):
                 update_job(
                     job_id,
                     status="skipped",

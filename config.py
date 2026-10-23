@@ -179,11 +179,28 @@ BROWSER_HEADLESS = os.environ.get("DOWFLOW_BROWSER_VISIBLE", "").strip().lower()
 BROWSER_PROFILE_DIR = BASE_DIR / "browser_profile"
 YOUTUBE_COOKIES_FILE = BASE_DIR / "youtube_cookies.txt"
 
+# ── Performance : nombre de connexions parallèles ────────────────────────────
+# Palier choisi au démarrage selon la puissance du PC (cœurs CPU) et le débit
+# réseau mesuré : 8 / 16 / 32 / 64 / 128. Plus de connexions = plus de débit
+# utile sur les gros fichiers, sans saturer une machine modeste.
+# Forcer une valeur précise :  set DOWFLOW_CONNECTIONS=64
+CONNECTIONS_OVERRIDE = os.environ.get("DOWFLOW_CONNECTIONS", "").strip()
+
 # Proxy settings (Optional)
 # Format: ["http://user:pass@host:port", "http://host2:port2"]
 # Leave empty [] to not use proxies.
 # Note: free public proxies often time out; Direct is tried first.
 PROXIES = []
 
-# Performance settings
-MAX_DOWNLOADS_BEFORE_REFRESH = 10 # Nombre de téléchargements avant de forcer un nettoyage console/mémoire
+# Récupération + validation automatiques de proxys publics gratuits (appliqués à
+# tous les agents : aria2c + yt-dlp). Désactivé par défaut car ces proxys sont
+# très instables et peuvent ralentir voire casser un téléchargement.
+# Activer explicitement :  set DOWFLOW_PROXY_AUTO=1
+PROXY_AUTO = os.environ.get("DOWFLOW_PROXY_AUTO", "").strip().lower() in {"1", "true", "yes", "on"}
+PROXY_SOURCES = (
+    "https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/http.txt",
+    "https://raw.githubusercontent.com/monosans/proxy-list/main/proxies/http.txt",
+)
+PROXY_VALIDATE_URL = "http://www.gstatic.com/generate_204"
+PROXY_VALIDATE_TIMEOUT = 4.0
+PROXY_POOL_TTL_SECONDS = 1800.0
