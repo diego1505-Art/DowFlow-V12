@@ -100,6 +100,16 @@ def index():
     return render_template("menu.html", has_ffmpeg=has_ffmpeg(), menu=menu)
 
 
+@app.get("/api/status")
+def application_status():
+    """Healthcheck léger pour les clients qui attendent le démarrage du serveur."""
+    return jsonify({
+        "ready": True,
+        "service": "DowFlow",
+        "ffmpeg": has_ffmpeg(),
+    })
+
+
 @app.get("/api/menu")
 def menu_config_api():
     return jsonify(load_menu())
