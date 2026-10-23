@@ -125,4 +125,14 @@ Pour préparer un installateur Windows :
 .\build-desktop.ps1
 ```
 
-Le script embarque le serveur Flask avec PyInstaller, puis le lanceur Electron dans l’installateur. Le `.exe` produit peut donc démarrer DowFlow sans Python séparé. Electron ne produit pas directement un APK Android ; cette cible nécessitera Capacitor ou un projet Android séparé.
+Le script embarque le serveur Flask avec PyInstaller, puis le lanceur Electron dans l’installateur. Le `.exe` produit peut donc démarrer DowFlow sans Python séparé.
+
+La plateforme Capacitor Android est initialisée dans `android/`. Après l’installation complète du SDK Android par Android Studio, configurez l’URL de DowFlow puis générez l’APK debug :
+
+```powershell
+$env:DOWFLOW_MOBILE_URL = "https://votre-tunnel.example/video"
+npm run android:sync
+npm run android:build
+```
+
+L’APK sera produit dans `android/app/build/outputs/apk/debug/`. Capacitor utilise ici l’URL du serveur configurée au build ; un APK qui embarque directement le serveur Flask nécessitera une architecture Android native supplémentaire.

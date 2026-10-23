@@ -7,7 +7,11 @@
   "main": "electron/main.cjs",
   "scripts": {
     "electron": "node node_modules/electron/cli.js .",
-    "electron:dist": "node node_modules/electron-builder/cli.js --win nsis"
+    "electron:dist": "node node_modules/electron-builder/cli.js --win nsis",
+    "android:add": "node node_modules/@capacitor/cli/bin/capacitor add android",
+    "android:sync": "node node_modules/@capacitor/cli/bin/capacitor sync android",
+    "android:open": "node node_modules/@capacitor/cli/bin/capacitor open android",
+    "android:build": "cd android && gradlew.bat assembleDebug"
   },
   "build": {
     "appId": "com.dowflow.desktop",
@@ -36,7 +40,11 @@
     "asar": true
   },
   "devDependencies": {
+    "@capacitor/android": "^8.5.3",
+    "@capacitor/cli": "^8.5.3",
+    "@capacitor/core": "^8.5.3",
     "electron": "^39.0.0",
-    "electron-builder": "^26.0.12"
+    "electron-builder": "^26.0.12",
+    "typescript": "^5.9.3"
   }
 }
