@@ -98,6 +98,9 @@ def status() -> dict[str, Any]:
             url = f"{_BASE_URL}/{slugify(_EXPORT_NAME)}"
             if _SCOPE != "root":
                 url += f"/{_SCOPE.lstrip('/')}"
+        error = _LAST_ERROR
+        if not running and _PROCESS is not None and not _BASE_URL and not error:
+            error = "Le tunnel s'est arrêté avant de fournir une URL. ngrok nécessite généralement un authtoken."
         return {
             "running": running,
             "provider": _PROVIDER,
@@ -105,7 +108,7 @@ def status() -> dict[str, Any]:
             "url": url,
             "name": _EXPORT_NAME,
             "ready": bool(url),
-            "error": _LAST_ERROR,
+            "error": error,
         }
 
 
@@ -120,6 +123,10 @@ def start(provider: str, scope: str, name: str = "DowFlow") -> dict[str, Any]:
     if not executable:
         command = "cloudflared" if provider == "cloudflare" else "ngrok"
         raise TunnelError(f"{command} est introuvable dans le PATH.")
+    if provider == "ngrok":
+        config_path = Path(os.environ.get("LOCALAPPDATA", "")) / "ngrok" / "ngrok.yml"
+        if not config_path.exists():
+            raise TunnelError("ngrok est installé mais n'est pas configuré. Ajoutez votre authtoken ngrok avant de relancer le tunnel.")
 
     with _LOCK:
         if _is_running() and _PROVIDER == provider:

@@ -38,7 +38,7 @@
             help.textContent = providerName === "cloudflare"
                 ? "Commande Cloudflare Tunnel : cloudflared tunnel --url http://127.0.0.1:5001. Le lien HTTPS public sera fourni par Cloudflare."
                 : providerName === "ngrok"
-                    ? "Commande ngrok : ngrok http 5001. ngrok affichera une URL HTTPS publique vers cette page."
+                    ? "ngrok est installé automatiquement, mais nécessite un authtoken ngrok pour ouvrir un lien public."
                     : `Lien actuel : ${currentUrl}. Pour un autre appareil sur le même réseau, utilisez l’adresse IP de cet ordinateur.`;
         }
     }
