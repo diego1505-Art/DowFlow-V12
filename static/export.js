@@ -46,7 +46,7 @@
         const mode = selectedMode();
         const scope = root.dataset.publisherScope || "root";
         if (mode === "app") {
-            window.location.href = `/api/publisher/manifest?scope=${encodeURIComponent(scope)}&name=${encodeURIComponent(name)}`;
+            window.location.href = `/api/publisher/app?scope=${encodeURIComponent(scope)}&name=${encodeURIComponent(name)}`;
         } else {
             window.location.href = `/api/publisher/link?scope=${encodeURIComponent(scope)}&name=${encodeURIComponent(name)}&provider=${encodeURIComponent(provider.value)}`;
         }

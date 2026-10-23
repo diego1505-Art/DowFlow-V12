@@ -6,7 +6,8 @@
 }
 .publisher-export-button:hover { border-color: rgba(201, 96, 52, 0.7); background: rgba(201, 96, 52, 0.22); }
 .publisher-export-dialog {
-    width: min(520px, calc(100% - 32px)); border: 1px solid #675044; border-radius: 20px;
+    box-sizing: border-box; width: min(520px, calc(100% - 32px)); max-height: calc(100vh - 32px);
+    overflow-y: auto; border: 1px solid #675044; border-radius: 20px;
     padding: 24px; color: #fff; background: #211914; box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55);
 }
 .publisher-export-dialog::backdrop { background: rgba(0, 0, 0, 0.72); }

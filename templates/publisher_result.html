@@ -23,8 +23,14 @@
         <p>Adresse actuelle :</p>
         <code id="publicUrl">{{ public_url }}</code>
         <button type="button" onclick="navigator.clipboard.writeText(document.getElementById('publicUrl').textContent)">Copier le lien</button>
+        {% if mode == "app" %}
+        <p>Cette version est une application web installable. Ouvre l’espace puis utilise le menu du navigateur et choisis <strong>Installer l’application</strong>.</p>
+        <p>Manifeste de l’application :</p>
+        <code>{{ manifest_url }}</code>
+        {% else %}
         <p>Pour créer une adresse publique avec {{ provider }} :</p>
         <pre>{{ tunnel_command }}</pre>
+        {% endif %}
         <a href="{{ public_url }}">Ouvrir l’espace</a>
         <a class="secondary" href="/">Retour au menu</a>
     </main>

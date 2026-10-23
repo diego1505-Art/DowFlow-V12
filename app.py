@@ -4,7 +4,7 @@ import time
 import uuid
 from pathlib import Path
 
-from flask import Flask, abort, jsonify, render_template, request, send_file, send_from_directory
+from flask import Flask, abort, jsonify, render_template, request, send_file, send_from_directory, url_for
 from werkzeug.utils import secure_filename
 
 from config import (
@@ -166,6 +166,25 @@ def publisher_link():
         public_url=public_url,
         provider=provider,
         tunnel_command=commands.get(provider, commands["other"]),
+        mode="link",
+    )
+
+
+@app.get("/api/publisher/app")
+def publisher_app():
+    scope = request.args.get("scope", "root").strip()
+    name = request.args.get("name", "DowFlow").strip()[:120] or "DowFlow"
+    if scope not in PUBLISHER_PATHS:
+        return jsonify({"success": False, "error": "Cet espace n'existe pas."}), 404
+    return render_template(
+        "publisher_result.html",
+        export_name=name,
+        export_scope=scope,
+        public_url=request.host_url.rstrip("/") + PUBLISHER_PATHS[scope],
+        provider="PWA",
+        tunnel_command="Installez l’espace depuis le menu du navigateur : Installer l’application.",
+        mode="app",
+        manifest_url=url_for("publisher_manifest", scope=scope, name=name),
     )
 
 
