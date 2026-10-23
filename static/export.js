@@ -56,7 +56,6 @@
         const name = nameInput.value.trim() || "DowFlow";
         const mode = selectedMode();
         const scope = root.dataset.publisherScope || "root";
-        form.hidden = true;
         result.hidden = false;
         openResult.hidden = true;
         copyResult.hidden = true;
@@ -64,7 +63,8 @@
         resultUrl.textContent = "";
 
         const localPath = scope === "root" ? "/" : `/${scope}`;
-        const localUrl = `${window.location.origin}${localPath}`;
+        const namedUrl = (baseUrl) => `${baseUrl}${baseUrl.includes("?") ? "&" : "?"}export=${encodeURIComponent(name)}`;
+        const localUrl = namedUrl(`${window.location.origin}${localPath}`);
         if (mode === "app") {
             const manifestUrl = `${window.location.origin}/manifest.webmanifest?scope=${encodeURIComponent(scope)}&name=${encodeURIComponent(name)}`;
             resultStatus.textContent = `Application « ${name} » prête à être installée depuis cet espace.`;
@@ -99,12 +99,13 @@
             const status = await statusResponse.json();
             if (status.ready) {
                 resultStatus.textContent = `Lien « ${name} » prêt.`;
-                resultUrl.textContent = status.url;
-                openResult.href = status.url;
+                const publicUrl = namedUrl(status.url);
+                resultUrl.textContent = publicUrl;
+                openResult.href = publicUrl;
                 openResult.hidden = false;
                 copyResult.hidden = false;
                 if (stopTunnel) stopTunnel.hidden = false;
-                copyResult.onclick = () => navigator.clipboard.writeText(status.url);
+                copyResult.onclick = () => navigator.clipboard.writeText(publicUrl);
                 clearInterval(pollTimer);
             } else if (status.error) {
                 resultStatus.textContent = status.error;
