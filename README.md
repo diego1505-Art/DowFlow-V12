@@ -109,3 +109,20 @@ Les paramètres principaux se trouvent dans `config.py`. Plusieurs options peuve
 - `DOWFLOW_PROXY_AUTO` pour activer la récupération de proxys publics.
 
 Les données générées, les profils navigateur, les bases SQLite, les téléchargements et les journaux restent locaux et ne doivent pas être commités.
+
+## Application desktop
+
+Electron est fourni pour ouvrir DowFlow dans une fenêtre desktop :
+
+```powershell
+npm install
+npm run electron
+```
+
+Pour préparer un installateur Windows :
+
+```powershell
+npm run electron:dist
+```
+
+Le shell Electron démarre le serveur Flask local. Pour un installateur totalement autonome, il faudra ensuite embarquer un runtime Python et les dépendances Flask avec PyInstaller. Electron ne produit pas directement un APK Android ; cette cible nécessitera Capacitor ou un projet Android séparé.
