@@ -20,17 +20,26 @@ _TOKEN = ""
 _LAST_ERROR = ""
 
 
+def _extract_public_url(provider: str, line: str) -> str:
+    if provider == "cloudflare":
+        pattern = r"https://[a-z0-9-]+\.trycloudflare\.com"
+    else:
+        pattern = r"https://[a-z0-9-]+(?:\.[a-z0-9-]+)*\.(?:ngrok-free\.app|ngrok\.io|ngrok\.app)"
+    match = re.search(pattern, line, re.IGNORECASE)
+    return match.group(0).rstrip(".,)") if match else ""
+
+
 def _read_output(process: subprocess.Popen[str], token: str) -> None:
     global _BASE_URL, _LAST_ERROR
     if process.stdout is None:
         return
     for line in process.stdout:
-        urls = re.findall(r"https://[^\s\"']+", line)
         with _LOCK:
             if token != _TOKEN:
                 return
-            if urls and not _BASE_URL:
-                _BASE_URL = urls[0].rstrip(".,)")
+            public_url = _extract_public_url(_PROVIDER, line)
+            if public_url and not _BASE_URL:
+                _BASE_URL = public_url
             if "error" in line.lower() or "failed" in line.lower():
                 _LAST_ERROR = line.strip()[-500:]
 
