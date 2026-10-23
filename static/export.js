@@ -12,6 +12,7 @@
     const openResult = root.querySelector("[data-open-publisher-result]");
     const copyResult = root.querySelector("[data-copy-publisher-result]");
     const stopTunnel = root.querySelector("[data-stop-publisher]");
+    const closePublisher = root.querySelector("[data-close-publisher]");
     const nameInput = root.querySelector("[data-publisher-name]");
     const modeInputs = root.querySelectorAll("[name='publisher-mode']");
     const provider = root.querySelector("[data-publisher-provider]");
@@ -20,6 +21,7 @@
     let pollTimer;
 
     if (!dialog || !form || !result || !resultStatus || !resultUrl) return;
+    if (closePublisher) closePublisher.addEventListener("click", () => dialog.close());
 
     function selectedMode() {
         return root.querySelector("[name='publisher-mode']:checked").value;
@@ -76,9 +78,12 @@
         resultUrl.textContent = "";
 
         const localPath = scope === "root" ? "/" : `/${scope}`;
-        const namedUrl = (baseUrl) => baseUrl.includes("export=")
-            ? baseUrl
-            : `${baseUrl}${baseUrl.includes("?") ? "&" : "?"}export=${encodeURIComponent(name)}`;
+        const slug = (value) => value.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9]+/g, "-").replace(/^-+|-+$/g, "").toLowerCase() || "dowflow";
+        const namedUrl = (baseUrl) => {
+            if (baseUrl.includes("/" + slug(name))) return baseUrl;
+            const path = scope === "root" ? `/${slug(name)}` : `/${slug(name)}/${scope}`;
+            return `${new URL(baseUrl).origin}${path}`;
+        };
         const localUrl = namedUrl(`${window.location.origin}${localPath}`);
         if (mode === "app") {
             const manifestUrl = `${window.location.origin}/manifest.webmanifest?scope=${encodeURIComponent(scope)}&name=${encodeURIComponent(name)}`;

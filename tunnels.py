@@ -3,6 +3,9 @@ import re
 import shutil
 import subprocess
 import threading
+import os
+import unicodedata
+from pathlib import Path
 import uuid
 from typing import Any
 from urllib.parse import quote
@@ -10,6 +13,43 @@ from urllib.parse import quote
 
 class TunnelError(RuntimeError):
     pass
+
+
+def slugify(value: str) -> str:
+    normalized = unicodedata.normalize("NFKD", value).encode("ascii", "ignore").decode("ascii")
+    slug = re.sub(r"[^a-zA-Z0-9]+", "-", normalized).strip("-").lower()
+    return slug or "dowflow"
+
+
+def _find_executable(command: str) -> str | None:
+    found = shutil.which(command)
+    if found:
+        return found
+    local_app_data = os.environ.get("LOCALAPPDATA", "")
+    if local_app_data:
+        packages = os.path.join(local_app_data, "Microsoft", "WinGet", "Packages")
+        for candidate in Path(packages).glob(f"*{command}*"):
+            matches = list(candidate.rglob(f"{command}.exe"))
+            if matches:
+                return str(matches[0])
+    return None
+
+
+def _install_ngrok() -> str | None:
+    winget = shutil.which("winget")
+    if not winget:
+        return None
+    try:
+        subprocess.run(
+            [winget, "install", "--id", "Ngrok.Ngrok", "--exact", "--silent", "--accept-package-agreements", "--accept-source-agreements"],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    return _find_executable("ngrok")
 
 
 _LOCK = threading.RLock()
@@ -53,9 +93,11 @@ def _is_running() -> bool:
 def status() -> dict[str, Any]:
     with _LOCK:
         running = _is_running()
-        url = f"{_BASE_URL}/{_SCOPE.lstrip('/')}" if _BASE_URL else ""
-        if url and _EXPORT_NAME:
-            url += f"?export={quote(_EXPORT_NAME, safe='')}"
+        url = ""
+        if _BASE_URL:
+            url = f"{_BASE_URL}/{slugify(_EXPORT_NAME)}"
+            if _SCOPE != "root":
+                url += f"/{_SCOPE.lstrip('/')}"
         return {
             "running": running,
             "provider": _PROVIDER,
@@ -72,7 +114,9 @@ def start(provider: str, scope: str, name: str = "DowFlow") -> dict[str, Any]:
     provider = provider.strip().lower()
     if provider not in {"cloudflare", "ngrok"}:
         raise TunnelError("Ce fournisseur ne peut pas être démarré automatiquement.")
-    executable = shutil.which("cloudflared" if provider == "cloudflare" else "ngrok")
+    executable = _find_executable("cloudflared" if provider == "cloudflare" else "ngrok")
+    if not executable and provider == "ngrok":
+        executable = _install_ngrok()
     if not executable:
         command = "cloudflared" if provider == "cloudflare" else "ngrok"
         raise TunnelError(f"{command} est introuvable dans le PATH.")
