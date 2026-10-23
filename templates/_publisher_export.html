@@ -1,0 +1,31 @@
+<link rel="stylesheet" href="{{ url_for('static', filename='export.css') }}">
+<link rel="manifest" href="{{ url_for('publisher_manifest') }}?scope={{ export_scope }}&name={{ export_name|urlencode }}">
+<div class="publisher-export" data-publisher-export data-publisher-scope="{{ export_scope }}" data-publisher-default-name="{{ export_name }}">
+    <button class="publisher-export-button" type="button" data-open-publisher>Exporter</button>
+    <dialog class="publisher-export-dialog">
+        <form method="dialog">
+            <h2>Exporter {{ export_name }}</h2>
+            <p>Choisis le nom et le mode de publication de cet espace.</p>
+            <label for="publisherName-{{ export_scope }}">Nom de l’export</label>
+            <input id="publisherName-{{ export_scope }}" data-publisher-name maxlength="120" required>
+            <label>Choix de l’export</label>
+            <div class="publisher-export-mode">
+                <label><input type="radio" name="publisher-mode" value="link" checked><span>Lien HTTP / HTTPS</span></label>
+                <label><input type="radio" name="publisher-mode" value="app"><span>Application web installable</span></label>
+            </div>
+            <label data-provider-label for="publisherProvider-{{ export_scope }}">Fournisseur du lien</label>
+            <select id="publisherProvider-{{ export_scope }}" data-publisher-provider>
+                <option value="local">Lien local ou réseau</option>
+                <option value="cloudflare">Cloudflare Tunnel</option>
+                <option value="ngrok">ngrok</option>
+                <option value="other">Autre tunnel compatible</option>
+            </select>
+            <p class="publisher-export-help" data-publisher-help></p>
+            <div class="publisher-export-actions">
+                <button type="button" value="cancel" onclick="this.closest('dialog').close()">Annuler</button>
+                <button type="submit">Préparer l’export</button>
+            </div>
+        </form>
+    </dialog>
+</div>
+<script src="{{ url_for('static', filename='export.js') }}" defer></script>

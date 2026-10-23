@@ -96,7 +96,8 @@ def register_local_media(source_path: Path) -> dict[str, str]:
 @app.route("/")
 def index():
     """Grand menu : choix du type de telechargement."""
-    return render_template("menu.html", has_ffmpeg=has_ffmpeg(), menu=load_menu())
+    menu = load_menu()
+    return render_template("menu.html", has_ffmpeg=has_ffmpeg(), menu=menu, export_scope="root", export_name=menu["name"])
 
 
 @app.get("/api/menu")
@@ -134,16 +135,77 @@ def export_menu_api():
     return response
 
 
+PUBLISHER_PATHS = {
+    "root": "/",
+    "video": "/video",
+    "music": "/music",
+    "film": "/film",
+    "anime": "/anime",
+    "image": "/image",
+}
+
+
+@app.get("/api/publisher/link")
+def publisher_link():
+    scope = request.args.get("scope", "root").strip()
+    name = request.args.get("name", "DowFlow").strip()[:120] or "DowFlow"
+    provider = request.args.get("provider", "local").strip()
+    if scope not in PUBLISHER_PATHS:
+        return jsonify({"success": False, "error": "Cet espace n'existe pas."}), 404
+    public_url = request.host_url.rstrip("/") + PUBLISHER_PATHS[scope]
+    commands = {
+        "cloudflare": "cloudflared tunnel --url http://127.0.0.1:5001",
+        "ngrok": "ngrok http 5001",
+        "other": "Utilisez votre tunnel HTTP/HTTPS vers le port 5001.",
+        "local": "Utilisez cette URL sur cet ordinateur ou son adresse IP locale.",
+    }
+    return render_template(
+        "publisher_result.html",
+        export_name=name,
+        export_scope=scope,
+        public_url=public_url,
+        provider=provider,
+        tunnel_command=commands.get(provider, commands["other"]),
+    )
+
+
+@app.get("/api/publisher/manifest")
+@app.get("/manifest.webmanifest")
+def publisher_manifest():
+    scope = request.args.get("scope", "root").strip()
+    name = request.args.get("name", "DowFlow").strip()[:120] or "DowFlow"
+    if scope not in PUBLISHER_PATHS:
+        return jsonify({"success": False, "error": "Cet espace n'existe pas."}), 404
+    manifest = {
+        "name": name,
+        "short_name": name[:24],
+        "start_url": PUBLISHER_PATHS[scope],
+        "scope": "/",
+        "display": "standalone",
+        "background_color": "#0a0a0a",
+        "theme_color": "#c96034",
+        "icons": [{"src": "/static/favicon.svg", "sizes": "any", "type": "image/svg+xml"}],
+    }
+    response = jsonify(manifest)
+    response.headers["Content-Type"] = "application/manifest+json; charset=utf-8"
+    return response
+
+
+@app.get("/service-worker.js")
+def service_worker():
+    return send_from_directory("static", "service-worker.js", mimetype="application/javascript")
+
+
 @app.route("/video")
 def video_page():
     """Telechargeur video / audio generique (template historique)."""
-    return render_template("dowload.html", has_ffmpeg=has_ffmpeg())
+    return render_template("dowload.html", has_ffmpeg=has_ffmpeg(), export_scope="video", export_name="DowFlow Vidéo")
 
 
 @app.route("/music")
 def music_page():
     """Espace musique : recherche, populaires, telechargement, bibliotheque."""
-    return render_template("music.html", has_ffmpeg=has_ffmpeg())
+    return render_template("music.html", has_ffmpeg=has_ffmpeg(), export_scope="music", export_name="DowFlow Musique")
 
 
 @app.route("/film")
@@ -161,6 +223,8 @@ def coming_soon_page():
         label=label,
         description=description,
         has_ffmpeg=has_ffmpeg(),
+        export_scope=category,
+        export_name=label,
     )
 
 
@@ -617,4 +681,10 @@ if __name__ == "__main__":
     if DEBUG_MODE:
         log.info("DEBUG: historique=/history  jobs=/jobs  async=/download-async")
     log.info("Ctrl+C pour arrêter")
-    app.run(debug=DEBUG_MODE, host="127.0.0.1", port=5001, use_reloader=False, threaded=True)
+    app.run(
+        debug=DEBUG_MODE,
+        host=os.environ.get("DOWFLOW_HOST", "127.0.0.1"),
+        port=int(os.environ.get("DOWFLOW_PORT", "5001")),
+        use_reloader=False,
+        threaded=True,
+    )

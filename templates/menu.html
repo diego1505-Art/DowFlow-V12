@@ -151,7 +151,7 @@
                 </div>
                 <div class="menu-actions">
                     <button class="action-button" type="button" id="renameButton">Renommer</button>
-                    <button class="action-button" type="button" id="exportButton">Exporter</button>
+                    {% include "_publisher_export.html" %}
                 </div>
             </header>
 
@@ -184,7 +184,7 @@
 
     <dialog id="menuDialog">
         <form method="dialog" id="menuForm">
-            <h2 id="dialogTitle">Exporter le menu</h2>
+            <h2 id="dialogTitle">Renommer un menu</h2>
             <label for="menuScope">Élément à traiter</label>
             <select id="menuScope">
                 <option value="root">Menu entier</option>
@@ -196,7 +196,7 @@
             <input id="menuName" maxlength="120" value="{{ menu.name }}" required>
             <div class="dialog-actions">
                 <button class="action-button" value="cancel">Annuler</button>
-                <button class="action-button" id="dialogSubmit" value="default">Exporter</button>
+                <button class="action-button" id="dialogSubmit" value="default">Enregistrer</button>
             </div>
         </form>
     </dialog>
@@ -206,22 +206,16 @@
         const nameInput = document.getElementById('menuName');
         const form = document.getElementById('menuForm');
         const submit = document.getElementById('dialogSubmit');
-        let mode = 'export';
         const rootName = {{ menu.name|tojson }};
 
-        function openMenuDialog(nextMode) {
-            mode = nextMode;
-            document.getElementById('dialogTitle').textContent = mode === 'rename' ? 'Renommer un menu' : 'Exporter le menu';
-            submit.textContent = mode === 'rename' ? 'Enregistrer' : 'Exporter';
+        function openMenuDialog() {
             scope.value = 'root';
             nameInput.value = rootName;
             dialog.showModal();
         }
 
-        document.getElementById('exportButton').addEventListener('click', () => openMenuDialog('export'));
-        document.getElementById('renameButton').addEventListener('click', () => openMenuDialog('rename'));
+        document.getElementById('renameButton').addEventListener('click', openMenuDialog);
         scope.addEventListener('change', () => {
-            if (mode === 'export') return;
             nameInput.value = scope.value === 'root' ? rootName : scope.options[scope.selectedIndex].textContent;
         });
         form.addEventListener('submit', async (event) => {
@@ -230,11 +224,6 @@
             const id = scope.value;
             const label = nameInput.value.trim();
             if (!label) return;
-            if (mode === 'export') {
-                window.location.href = `/api/menu/export?id=${encodeURIComponent(id)}&name=${encodeURIComponent(label)}`;
-                dialog.close();
-                return;
-            }
             const response = await fetch('/api/menu/rename', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
