@@ -5,6 +5,7 @@ import subprocess
 import threading
 import uuid
 from typing import Any
+from urllib.parse import quote
 
 
 class TunnelError(RuntimeError):
@@ -18,6 +19,7 @@ _SCOPE = "root"
 _BASE_URL = ""
 _TOKEN = ""
 _LAST_ERROR = ""
+_EXPORT_NAME = "DowFlow"
 
 
 def _extract_public_url(provider: str, line: str) -> str:
@@ -52,18 +54,21 @@ def status() -> dict[str, Any]:
     with _LOCK:
         running = _is_running()
         url = f"{_BASE_URL}/{_SCOPE.lstrip('/')}" if _BASE_URL else ""
+        if url and _EXPORT_NAME:
+            url += f"?export={quote(_EXPORT_NAME, safe='')}"
         return {
             "running": running,
             "provider": _PROVIDER,
             "scope": _SCOPE,
             "url": url,
+            "name": _EXPORT_NAME,
             "ready": bool(url),
             "error": _LAST_ERROR,
         }
 
 
-def start(provider: str, scope: str) -> dict[str, Any]:
-    global _PROCESS, _PROVIDER, _SCOPE, _BASE_URL, _TOKEN, _LAST_ERROR
+def start(provider: str, scope: str, name: str = "DowFlow") -> dict[str, Any]:
+    global _PROCESS, _PROVIDER, _SCOPE, _BASE_URL, _TOKEN, _LAST_ERROR, _EXPORT_NAME
     provider = provider.strip().lower()
     if provider not in {"cloudflare", "ngrok"}:
         raise TunnelError("Ce fournisseur ne peut pas être démarré automatiquement.")
@@ -74,6 +79,8 @@ def start(provider: str, scope: str) -> dict[str, Any]:
 
     with _LOCK:
         if _is_running() and _PROVIDER == provider:
+            _SCOPE = scope
+            _EXPORT_NAME = name.strip()[:120] or "DowFlow"
             return status()
         if _is_running():
             stop()
@@ -96,6 +103,7 @@ def start(provider: str, scope: str) -> dict[str, Any]:
             raise TunnelError(f"Impossible de démarrer {provider} : {error}") from error
         _PROVIDER = provider
         _SCOPE = scope
+        _EXPORT_NAME = name.strip()[:120] or "DowFlow"
         _BASE_URL = ""
         _LAST_ERROR = ""
         _TOKEN = uuid.uuid4().hex
@@ -104,7 +112,7 @@ def start(provider: str, scope: str) -> dict[str, Any]:
 
 
 def stop() -> dict[str, Any]:
-    global _PROCESS, _PROVIDER, _SCOPE, _BASE_URL, _TOKEN, _LAST_ERROR
+    global _PROCESS, _PROVIDER, _SCOPE, _BASE_URL, _TOKEN, _LAST_ERROR, _EXPORT_NAME
     with _LOCK:
         process = _PROCESS
         if process is not None and process.poll() is None:
@@ -119,6 +127,7 @@ def stop() -> dict[str, Any]:
         _BASE_URL = ""
         _TOKEN = ""
         _LAST_ERROR = ""
+        _EXPORT_NAME = "DowFlow"
         return status()
 
 

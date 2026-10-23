@@ -176,10 +176,11 @@ def publisher_tunnel_start():
     payload = request.get_json(silent=True) or {}
     provider = str(payload.get("provider", "")).strip()
     scope = str(payload.get("scope", "root")).strip()
+    name = str(payload.get("name", "DowFlow")).strip()
     if scope not in PUBLISHER_PATHS:
         return jsonify({"success": False, "error": "Cet espace n'existe pas."}), 404
     try:
-        return jsonify({"success": True, **start_tunnel(provider, scope)})
+        return jsonify({"success": True, **start_tunnel(provider, scope, name)})
     except TunnelError as error:
         return jsonify({"success": False, "error": str(error)}), 400
 

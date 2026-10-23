@@ -47,6 +47,19 @@
         result.hidden = true;
         dialog.showModal();
         updateHelp();
+        fetch("/api/publisher/tunnel/status").then((response) => response.json()).then((state) => {
+            if (!state.running || !state.url) return;
+            nameInput.value = state.name || nameInput.value;
+            form.hidden = false;
+            result.hidden = false;
+            resultStatus.textContent = `Tunnel ${state.provider} actif pour « ${state.name || nameInput.value} ».`;
+            resultUrl.textContent = state.url;
+            openResult.href = state.url;
+            openResult.hidden = false;
+            copyResult.hidden = false;
+            stopTunnel.hidden = false;
+            copyResult.onclick = () => navigator.clipboard.writeText(state.url);
+        });
     });
     modeInputs.forEach((input) => input.addEventListener("change", updateHelp));
     provider.addEventListener("change", updateHelp);
@@ -63,7 +76,9 @@
         resultUrl.textContent = "";
 
         const localPath = scope === "root" ? "/" : `/${scope}`;
-        const namedUrl = (baseUrl) => `${baseUrl}${baseUrl.includes("?") ? "&" : "?"}export=${encodeURIComponent(name)}`;
+        const namedUrl = (baseUrl) => baseUrl.includes("export=")
+            ? baseUrl
+            : `${baseUrl}${baseUrl.includes("?") ? "&" : "?"}export=${encodeURIComponent(name)}`;
         const localUrl = namedUrl(`${window.location.origin}${localPath}`);
         if (mode === "app") {
             const manifestUrl = `${window.location.origin}/manifest.webmanifest?scope=${encodeURIComponent(scope)}&name=${encodeURIComponent(name)}`;
@@ -87,7 +102,7 @@
         resultStatus.textContent = `Démarrage automatique de ${provider.value}…`;
         const response = await fetch("/api/publisher/tunnel/start", {
             method: "POST", headers: {"Content-Type": "application/json"},
-            body: JSON.stringify({provider: provider.value, scope})
+            body: JSON.stringify({provider: provider.value, scope, name})
         });
         const state = await response.json();
         if (!state.success) {
