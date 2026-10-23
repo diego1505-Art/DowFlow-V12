@@ -6,8 +6,9 @@
 }
 .publisher-export-button:hover { border-color: rgba(201, 96, 52, 0.7); background: rgba(201, 96, 52, 0.22); }
 .publisher-export-dialog {
-    box-sizing: border-box; width: min(520px, calc(100% - 32px)); max-height: calc(100vh - 32px);
-    overflow-y: auto; border: 1px solid #675044; border-radius: 20px;
+    box-sizing: border-box; width: min(520px, calc(100vw - 32px)); max-width: calc(100vw - 32px);
+    max-height: calc(100vh - 32px); overflow-x: hidden; overflow-y: auto;
+    border: 1px solid #675044; border-radius: 20px;
     padding: 24px; color: #fff; background: #211914; box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55);
 }
 .publisher-export-dialog::backdrop { background: rgba(0, 0, 0, 0.72); }
@@ -30,4 +31,9 @@
 .publisher-export-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
 .publisher-export-actions button { border: 1px solid #675044; border-radius: 10px; padding: 10px 14px; color: #fff; background: rgba(255, 255, 255, 0.1); cursor: pointer; font: inherit; }
 .publisher-export-actions button[type="submit"] { border-color: #c96034; background: #8f3f1d; }
+.publisher-export-result { margin-top: 16px; padding: 12px; border-radius: 10px; background: rgba(255, 255, 255, 0.07); }
+.publisher-export-result p { margin: 0 0 10px; font-size: 0.86rem; }
+.publisher-export-result code { display: block; overflow-wrap: anywhere; color: #ffd2bd; }
+.publisher-export-result a, .publisher-export-result button { margin: 10px 8px 0 0; border: 1px solid #675044; border-radius: 9px; padding: 8px 11px; color: #fff; background: #9c421f; cursor: pointer; font: inherit; text-decoration: none; }
+.publisher-export-result button[data-stop-publisher] { background: rgba(255, 255, 255, 0.12); }
 @media (max-width: 520px) { .publisher-export-mode { grid-template-columns: 1fr; } }

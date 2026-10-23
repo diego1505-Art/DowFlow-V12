@@ -1,9 +1,9 @@
-<link rel="stylesheet" href="{{ url_for('static', filename='export.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='export.css') }}?v=4">
 <link rel="manifest" href="{{ url_for('publisher_manifest') }}?scope={{ export_scope }}&name={{ export_name|urlencode }}">
 <div class="publisher-export" data-publisher-export data-publisher-scope="{{ export_scope }}" data-publisher-default-name="{{ export_name }}">
     <button class="publisher-export-button" type="button" data-open-publisher>Exporter</button>
     <dialog class="publisher-export-dialog">
-        <form method="dialog">
+        <form method="dialog" data-publisher-form>
             <h2>Exporter {{ export_name }}</h2>
             <p>Choisis le nom et le mode de publication de cet espace.</p>
             <label for="publisherName-{{ export_scope }}">Nom de l’export</label>
@@ -26,6 +26,15 @@
                 <button type="submit">Préparer l’export</button>
             </div>
         </form>
+        <section class="publisher-export-result" data-publisher-result hidden>
+            <p data-publisher-result-status>Préparation de l’export…</p>
+            <code data-publisher-result-url></code>
+            <div>
+                <a data-open-publisher-result target="_blank" rel="noopener" hidden>Ouvrir</a>
+                <button type="button" data-copy-publisher-result hidden>Copier le lien</button>
+                <button type="button" data-stop-publisher hidden>Arrêter le tunnel</button>
+            </div>
+        </section>
     </dialog>
 </div>
-<script src="{{ url_for('static', filename='export.js') }}" defer></script>
+<script src="{{ url_for('static', filename='export.js') }}?v=4" defer></script>
