@@ -21,6 +21,7 @@ from logger import get_logger
 from jobs import start_download_job, get_job, list_jobs
 from database import download_list, download_count_by_status
 from menu_config import export_menu, load_menu, rename_menu
+from tunnels import TunnelError, start as start_tunnel, status as tunnel_status, stop as stop_tunnel
 import music
 
 log = get_logger("app")
@@ -168,6 +169,29 @@ def publisher_link():
         tunnel_command=commands.get(provider, commands["other"]),
         mode="link",
     )
+
+
+@app.post("/api/publisher/tunnel/start")
+def publisher_tunnel_start():
+    payload = request.get_json(silent=True) or {}
+    provider = str(payload.get("provider", "")).strip()
+    scope = str(payload.get("scope", "root")).strip()
+    if scope not in PUBLISHER_PATHS:
+        return jsonify({"success": False, "error": "Cet espace n'existe pas."}), 404
+    try:
+        return jsonify({"success": True, **start_tunnel(provider, scope)})
+    except TunnelError as error:
+        return jsonify({"success": False, "error": str(error)}), 400
+
+
+@app.get("/api/publisher/tunnel/status")
+def publisher_tunnel_status():
+    return jsonify(tunnel_status())
+
+
+@app.post("/api/publisher/tunnel/stop")
+def publisher_tunnel_stop():
+    return jsonify({"success": True, **stop_tunnel()})
 
 
 @app.get("/api/publisher/app")

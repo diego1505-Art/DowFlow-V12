@@ -14,6 +14,8 @@
         code, pre { display: block; overflow-x: auto; padding: 14px; border-radius: 10px; color: #ffd2bd; background: #0d0a08; }
         a, button { display: inline-block; margin-top: 18px; border: 0; border-radius: 10px; padding: 11px 15px; color: #fff; background: #9c421f; text-decoration: none; cursor: pointer; font: inherit; }
         .secondary { margin-left: 8px; background: rgba(255,255,255,.12); }
+        #tunnelStatus { padding: 12px; border-radius: 10px; color: #ffd2bd; background: #2b211d; }
+        [hidden] { display: none !important; }
     </style>
 </head>
 <body>
@@ -28,11 +30,72 @@
         <p>Manifeste de l’application :</p>
         <code>{{ manifest_url }}</code>
         {% else %}
-        <p>Pour créer une adresse publique avec {{ provider }} :</p>
+        {% if provider in ["cloudflare", "ngrok"] %}
+        <p id="tunnelStatus">Démarrage automatique du tunnel {{ provider }}…</p>
+        <button id="openPublicLink" type="button" hidden>Ouvrir le lien public</button>
+        <button id="stopTunnel" type="button" hidden>Arrêter le tunnel</button>
+        <pre id="tunnelFallback" hidden>{{ tunnel_command }}</pre>
+        {% else %}
+        <p>Adresse réseau :</p>
         <pre>{{ tunnel_command }}</pre>
+        {% endif %}
         {% endif %}
         <a href="{{ public_url }}">Ouvrir l’espace</a>
         <a class="secondary" href="/">Retour au menu</a>
     </main>
+    {% if provider in ["cloudflare", "ngrok"] %}
+    <script>
+        const tunnelStatus = document.getElementById("tunnelStatus");
+        const openPublicLink = document.getElementById("openPublicLink");
+        const stopTunnel = document.getElementById("stopTunnel");
+        const tunnelFallback = document.getElementById("tunnelFallback");
+        let publicUrl = "";
+        let pollTimer;
+
+        async function updateTunnelStatus() {
+            const response = await fetch("/api/publisher/tunnel/status");
+            const state = await response.json();
+            if (state.ready) {
+                publicUrl = state.url;
+                tunnelStatus.textContent = `Tunnel ${state.provider} actif : ${publicUrl}`;
+                openPublicLink.hidden = false;
+                stopTunnel.hidden = false;
+                openPublicLink.onclick = () => window.open(publicUrl, "_blank", "noopener");
+                clearInterval(pollTimer);
+            } else if (state.error) {
+                tunnelStatus.textContent = state.error;
+                tunnelFallback.hidden = false;
+                stopTunnel.hidden = false;
+                clearInterval(pollTimer);
+            }
+        }
+
+        fetch("/api/publisher/tunnel/start", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({provider: "{{ provider }}", scope: "{{ export_scope }}"})
+        }).then((response) => response.json()).then((state) => {
+            if (!state.success) {
+                tunnelStatus.textContent = state.error;
+                tunnelFallback.hidden = false;
+                stopTunnel.hidden = false;
+                return;
+            }
+            updateTunnelStatus();
+            pollTimer = setInterval(updateTunnelStatus, 1000);
+        }).catch(() => {
+            tunnelStatus.textContent = "Impossible de contacter le serveur pour démarrer le tunnel.";
+            tunnelFallback.hidden = false;
+        });
+
+        stopTunnel.onclick = async () => {
+            await fetch("/api/publisher/tunnel/stop", {method: "POST"});
+            tunnelStatus.textContent = "Tunnel arrêté.";
+            openPublicLink.hidden = true;
+            stopTunnel.hidden = true;
+            clearInterval(pollTimer);
+        };
+    </script>
+    {% endif %}
 </body>
 </html>
