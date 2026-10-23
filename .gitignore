@@ -43,8 +43,7 @@ dowflow.db
 *.db-wal
 *.db-shm
 dowflow_menu.json
-node_modules/
+
 dist/
 build-output/
 build-work/
-*.spec

@@ -22,7 +22,6 @@ from jobs import start_download_job, get_job, list_jobs
 from database import download_list, download_count_by_status
 from menu_config import export_menu, load_menu, rename_menu
 from tunnels import TunnelError, slugify, start as start_tunnel, status as tunnel_status, stop as stop_tunnel
-import desktop_build
 import music
 
 log = get_logger("app")
@@ -198,77 +197,9 @@ def publisher_tunnel_stop():
     return jsonify({"success": True, **stop_tunnel()})
 
 
-@app.post("/api/publisher/build/windows")
-def publisher_windows_build():
-    try:
-        return jsonify({"success": True, **desktop_build.start()})
-    except (OSError, RuntimeError) as error:
-        return jsonify({"success": False, "error": str(error)}), 400
-
-
-@app.get("/api/publisher/build/windows/status")
-def publisher_windows_build_status():
-    return jsonify(desktop_build.status())
-
-
-@app.get("/api/publisher/build/windows/download/<path:filename>")
-def publisher_windows_build_download(filename):
-    safe_name = secure_filename(filename)
-    build_file = (Path(__file__).resolve().parent / "dist" / safe_name).resolve()
-    dist_folder = (Path(__file__).resolve().parent / "dist").resolve()
-    if not safe_name or build_file.parent != dist_folder or not build_file.is_file():
-        abort(404)
-    return send_file(build_file, as_attachment=True, download_name=safe_name)
-
-
-@app.get("/api/publisher/app")
-def publisher_app():
-    scope = request.args.get("scope", "root").strip()
-    name = request.args.get("name", "DowFlow").strip()[:120] or "DowFlow"
-    if scope not in PUBLISHER_PATHS:
-        return jsonify({"success": False, "error": "Cet espace n'existe pas."}), 404
-    return render_template(
-        "publisher_result.html",
-        export_name=name,
-        export_scope=scope,
-        public_url=request.host_url.rstrip("/") + f"/{slugify(name)}{PUBLISHER_PATHS[scope] if scope != 'root' else ''}",
-        provider="PWA",
-        tunnel_command="Installez l’espace depuis le menu du navigateur : Installer l’application.",
-        mode="app",
-        manifest_url=url_for("publisher_manifest", scope=scope, name=name),
-    )
-
-
-@app.get("/api/publisher/manifest")
-@app.get("/manifest.webmanifest")
-def publisher_manifest():
-    scope = request.args.get("scope", "root").strip()
-    name = request.args.get("name", "DowFlow").strip()[:120] or "DowFlow"
-    if scope not in PUBLISHER_PATHS:
-        return jsonify({"success": False, "error": "Cet espace n'existe pas."}), 404
-    manifest = {
-        "name": name,
-        "short_name": name[:24],
-        "start_url": f"/{slugify(name)}{PUBLISHER_PATHS[scope] if scope != 'root' else ''}",
-        "scope": "/",
-        "display": "standalone",
-        "background_color": "#0a0a0a",
-        "theme_color": "#c96034",
-        "icons": [{"src": "/static/favicon.svg", "sizes": "any", "type": "image/svg+xml"}],
-    }
-    response = jsonify(manifest)
-    response.headers["Content-Type"] = "application/manifest+json; charset=utf-8"
-    return response
-
-
-@app.get("/service-worker.js")
-def service_worker():
-    return send_from_directory("static", "service-worker.js", mimetype="application/javascript")
-
-
 @app.get("/<export_slug>")
 def named_root_page(export_slug):
-    if export_slug in {"api", "static", "service-worker.js", "manifest.webmanifest"}:
+    if export_slug in {"api", "static"}:
         abort(404)
     menu = load_menu()
     return render_template("menu.html", has_ffmpeg=has_ffmpeg(), menu=menu, export_scope="root", export_name=menu["name"])

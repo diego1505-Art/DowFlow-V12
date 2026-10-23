@@ -74,7 +74,6 @@ Chaque espace possède un bouton **Exporter**. Il permet de choisir un nom et un
 - **Lien HTTP / HTTPS** : ouvre l'espace courant et affiche l'adresse à partager.
 - **Cloudflare Tunnel** : lancez `cloudflared tunnel --url http://127.0.0.1:5001` pour obtenir une URL HTTPS publique.
 - **ngrok** : lancez `ngrok http 5001` pour obtenir une URL HTTPS publique.
-- **Application web installable** : le manifeste PWA permet d'installer l'espace depuis un navigateur compatible, sur Windows, Android, iPhone, macOS ou Linux.
 
 Pour autoriser les appareils du même réseau local à accéder au serveur :
 
@@ -110,29 +109,3 @@ Les paramètres principaux se trouvent dans `config.py`. Plusieurs options peuve
 
 Les données générées, les profils navigateur, les bases SQLite, les téléchargements et les journaux restent locaux et ne doivent pas être commités.
 
-## Application desktop
-
-Electron est fourni pour ouvrir DowFlow dans une fenêtre desktop :
-
-```powershell
-npm install
-npm run electron
-```
-
-Pour préparer un installateur Windows :
-
-```powershell
-.\build-desktop.ps1
-```
-
-Le script embarque le serveur Flask avec PyInstaller, puis le lanceur Electron dans l’installateur. Le `.exe` produit peut donc démarrer DowFlow sans Python séparé.
-
-La plateforme Capacitor Android est initialisée dans `android/`. Après l’installation complète du SDK Android par Android Studio, configurez l’URL de DowFlow puis générez l’APK debug :
-
-```powershell
-$env:DOWFLOW_MOBILE_URL = "https://votre-tunnel.example/video"
-npm run android:sync
-npm run android:build
-```
-
-L’APK sera produit dans `android/app/build/outputs/apk/debug/`. Capacitor utilise ici l’URL du serveur configurée au build ; un APK qui embarque directement le serveur Flask nécessitera une architecture Android native supplémentaire.
