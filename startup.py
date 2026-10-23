@@ -3,54 +3,64 @@
 from time import sleep
 
 from rich.align import Align
+from rich.box import ROUNDED
 from rich.console import Console, Group
 from rich.live import Live
+from rich.panel import Panel
 from rich.text import Text
 
 
-def _triangle_rows(glyph: str, direction: int) -> list[str]:
-    if direction in (0, 2):
-        counts = list(range(1, 16, 2))
-        if direction == 2:
-            counts.reverse()
-        return [" " * ((15 - count) // 2) + glyph * count for count in counts]
-
-    counts = list(range(1, 9)) + list(range(7, 0, -1))
-    if direction == 1:
-        return [glyph * count + " " * (15 - count) for count in counts]
-    return [" " * (15 - count) + glyph * count for count in counts]
+def _triangle_rows(console: Console, frame_number: int) -> list[Text]:
+    """Build a centered, proportional triangle without directional glyph drift."""
+    unicode_terminal = console.encoding.lower().startswith("utf")
+    glyph = "●" if unicode_terminal else "#"
+    counts = range(1, 14, 2)
+    highlight_row = (frame_number // 2) % len(counts)
+    rows = []
+    for row_number, count in enumerate(counts):
+        padding = (13 - count) // 2
+        style = "bold #ff5a3d" if row_number == highlight_row else "bold #b82c2e"
+        rows.append(Text(" " * padding + glyph * count, style=style, justify="center"))
+    return rows
 
 
 def _frame(console: Console, frame_number: int, complete: bool = False) -> Align:
-    symbols = ("▲", "▶", "▼", "◀")
-    if not console.encoding.lower().startswith("utf"):
-        symbols = ("^", ">", "v", "<")
-
-    direction = (frame_number // 12) % len(symbols)
-    color = "#ff3038" if frame_number % 2 == 0 else "#94151e"
-    rows = [Text(row, style=f"bold {color}") for row in _triangle_rows(symbols[direction], direction)]
-    rows.extend(
-        (
-            Text(""),
-            Text("D O W F L O W", style="bold white"),
-            Text("VIDEO   AUDIO   MEDIA", style="dim"),
-            Text(""),
-            Text(
-                "Initialisation terminee." if complete else "Initialisation en cours...",
-                style="dim",
-            ),
-        )
+    unicode_terminal = console.encoding.lower().startswith("utf")
+    bar_empty = "·" if unicode_terminal else "."
+    bar_fill = "━" if unicode_terminal else "="
+    progress_width = 30
+    progress = progress_width if complete else min(progress_width, frame_number + 1)
+    status = "Initialisation terminée" if complete else "Initialisation en cours"
+    dots = "" if complete else "." * ((frame_number // 5) % 4)
+    bar = Text(bar_fill * progress + bar_empty * (progress_width - progress), style="bold #ff5a3d")
+    content = [
+        Text(""),
+        *(_triangle_rows(console, frame_number)),
+        Text(""),
+        Text("D O W F L O W", style="bold white", justify="center"),
+        Text("VIDEO   AUDIO   MEDIA", style="dim", justify="center"),
+        Text(""),
+        bar,
+        Text(f"{status}{dots}", style="dim", justify="center"),
+    ]
+    panel = Panel(
+        Group(*content),
+        title=" DOWFLOW / STARTUP ",
+        title_align="center",
+        border_style="#7d2829",
+        box=ROUNDED,
+        padding=(1, 4),
     )
-    return Align.center(Group(*rows), vertical="middle", height=console.size.height)
+    return Align.center(panel, vertical="middle", height=console.size.height)
 
 
 def main() -> None:
     console = Console()
     with Live(_frame(console, 0), console=console, refresh_per_second=15, transient=False) as live:
-        for frame_number in range(48):
+        for frame_number in range(30):
             live.update(_frame(console, frame_number))
             sleep(0.09)
-        live.update(_frame(console, 47, complete=True))
+        live.update(_frame(console, 30, complete=True))
     console.print()
 
 
