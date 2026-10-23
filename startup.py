@@ -7,21 +7,27 @@ from rich.box import ROUNDED
 from rich.console import Console, Group
 from rich.live import Live
 from rich.panel import Panel
+from rich.table import Table
 from rich.text import Text
 
 
-def _triangle_rows(console: Console, frame_number: int) -> list[Text]:
-    """Build a centered, proportional triangle without directional glyph drift."""
+def _triangle_rows(console: Console, frame_number: int) -> Table:
+    """Build the triangle on fixed terminal cells to keep both edges symmetric."""
     unicode_terminal = console.encoding.lower().startswith("utf")
-    glyph = "● " if unicode_terminal else "# "
+    glyph = "●" if unicode_terminal else "#"
     counts = (9, 7, 5, 3, 1)
     highlight_row = (frame_number // 2) % len(counts)
-    rows = []
+    grid = Table.grid(padding=(0, 1), expand=False)
+    for _ in range(9):
+        grid.add_column(width=1, justify="center")
     for row_number, count in enumerate(counts):
-        padding = (9 - count) // 2
         style = "bold #ff5a3d" if row_number == highlight_row else "bold #b82c2e"
-        rows.append(Text("  " * padding + glyph * count, style=style, justify="center"))
-    return rows
+        start = (9 - count) // 2
+        cells = [Text("") for _ in range(9)]
+        for column in range(start, start + count):
+            cells[column] = Text(glyph, style=style)
+        grid.add_row(*cells)
+    return grid
 
 
 def _frame(console: Console, frame_number: int, complete: bool = False) -> Align:
@@ -35,7 +41,7 @@ def _frame(console: Console, frame_number: int, complete: bool = False) -> Align
     bar = Text(bar_fill * progress + bar_empty * (progress_width - progress), style="bold #ff5a3d")
     content = [
         Text(""),
-        *(_triangle_rows(console, frame_number)),
+        _triangle_rows(console, frame_number),
         Text(""),
         Text("D O W F L O W", style="bold white", justify="center"),
         Text("VIDEO   AUDIO   MEDIA", style="dim", justify="center"),
