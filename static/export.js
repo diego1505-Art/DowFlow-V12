@@ -30,8 +30,14 @@
     function updateHelp() {
         const mode = selectedMode();
         const providerName = provider.value;
-        if (mode === "app") {
+        if (mode === "web") {
             help.textContent = "Génère une application web installable (PWA), utilisable sur Windows, Android, iPhone, macOS et Linux depuis un navigateur compatible.";
+            provider.hidden = true;
+        } else if (mode === "exe") {
+            help.textContent = "Prépare un vrai installateur Windows .exe avec Electron et PyInstaller. Le build peut prendre quelques minutes.";
+            provider.hidden = true;
+        } else if (mode === "apk") {
+            help.textContent = "Le format .apk nécessite Android SDK et Capacitor. Cette cible sera signalée comme indisponible tant que ces outils ne sont pas installés.";
             provider.hidden = true;
         } else {
             provider.hidden = false;
@@ -85,7 +91,7 @@
             return `${new URL(baseUrl).origin}${path}`;
         };
         const localUrl = namedUrl(`${window.location.origin}${localPath}`);
-        if (mode === "app") {
+        if (mode === "web") {
             const manifestUrl = `${window.location.origin}/manifest.webmanifest?scope=${encodeURIComponent(scope)}&name=${encodeURIComponent(name)}`;
             resultStatus.textContent = `Application « ${name} » prête à être installée depuis cet espace.`;
             resultUrl.textContent = localUrl;
@@ -93,6 +99,40 @@
             openResult.hidden = false;
             copyResult.hidden = false;
             copyResult.onclick = () => navigator.clipboard.writeText(localUrl);
+            return;
+        }
+        if (mode === "apk") {
+            resultStatus.textContent = "Export APK indisponible : Android SDK et Capacitor ne sont pas installés dans ce projet.";
+            return;
+        }
+        if (mode === "exe") {
+            resultStatus.textContent = "Construction de l’application Windows .exe…";
+            const buildResponse = await fetch("/api/publisher/build/windows", {method: "POST"});
+            const buildState = await buildResponse.json();
+            if (!buildState.success) {
+                resultStatus.textContent = buildState.error;
+                return;
+            }
+            const refreshBuild = async () => {
+                const response = await fetch("/api/publisher/build/windows/status");
+                const state = await response.json();
+                if (state.running) {
+                    resultStatus.textContent = "Construction de l’application Windows en cours…";
+                    return;
+                }
+                clearInterval(pollTimer);
+                if (state.download) {
+                    resultStatus.textContent = `Application « ${name} » prête.`;
+                    resultUrl.textContent = state.download;
+                    openResult.href = state.download;
+                    openResult.textContent = "Télécharger le .exe";
+                    openResult.hidden = false;
+                } else {
+                    resultStatus.textContent = state.error || "Le build Windows a échoué. Consultez les logs du serveur.";
+                }
+            };
+            await refreshBuild();
+            pollTimer = setInterval(refreshBuild, 1500);
             return;
         }
         if (provider.value === "local" || provider.value === "other") {

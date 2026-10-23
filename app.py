@@ -22,6 +22,7 @@ from jobs import start_download_job, get_job, list_jobs
 from database import download_list, download_count_by_status
 from menu_config import export_menu, load_menu, rename_menu
 from tunnels import TunnelError, slugify, start as start_tunnel, status as tunnel_status, stop as stop_tunnel
+import desktop_build
 import music
 
 log = get_logger("app")
@@ -195,6 +196,29 @@ def publisher_tunnel_status():
 @app.post("/api/publisher/tunnel/stop")
 def publisher_tunnel_stop():
     return jsonify({"success": True, **stop_tunnel()})
+
+
+@app.post("/api/publisher/build/windows")
+def publisher_windows_build():
+    try:
+        return jsonify({"success": True, **desktop_build.start()})
+    except (OSError, RuntimeError) as error:
+        return jsonify({"success": False, "error": str(error)}), 400
+
+
+@app.get("/api/publisher/build/windows/status")
+def publisher_windows_build_status():
+    return jsonify(desktop_build.status())
+
+
+@app.get("/api/publisher/build/windows/download/<path:filename>")
+def publisher_windows_build_download(filename):
+    safe_name = secure_filename(filename)
+    build_file = (Path(__file__).resolve().parent / "dist" / safe_name).resolve()
+    dist_folder = (Path(__file__).resolve().parent / "dist").resolve()
+    if not safe_name or build_file.parent != dist_folder or not build_file.is_file():
+        abort(404)
+    return send_file(build_file, as_attachment=True, download_name=safe_name)
 
 
 @app.get("/api/publisher/app")

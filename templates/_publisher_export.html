@@ -1,4 +1,4 @@
-<link rel="stylesheet" href="{{ url_for('static', filename='export.css') }}?v=4">
+<link rel="stylesheet" href="{{ url_for('static', filename='export.css') }}?v=5">
 <link rel="manifest" href="{{ url_for('publisher_manifest') }}?scope={{ export_scope }}&name={{ export_name|urlencode }}">
 <div class="publisher-export" data-publisher-export data-publisher-scope="{{ export_scope }}" data-publisher-default-name="{{ export_name }}">
     <button class="publisher-export-button" type="button" data-open-publisher>Exporter</button>
@@ -12,7 +12,9 @@
             <label>Choix de l’export</label>
             <div class="publisher-export-mode">
                 <label><input type="radio" name="publisher-mode" value="link" checked><span>Lien HTTP / HTTPS</span></label>
-                <label><input type="radio" name="publisher-mode" value="app"><span>Application web installable</span></label>
+                <label><input type="radio" name="publisher-mode" value="web"><span>Application web (PWA)</span></label>
+                <label><input type="radio" name="publisher-mode" value="exe"><span>Application Windows (.exe)</span></label>
+                <label><input type="radio" name="publisher-mode" value="apk"><span>Application Android (.apk)</span></label>
             </div>
             <label data-provider-label for="publisherProvider-{{ export_scope }}">Fournisseur du lien</label>
             <select id="publisherProvider-{{ export_scope }}" data-publisher-provider>
@@ -38,4 +40,4 @@
         </section>
     </dialog>
 </div>
-<script src="{{ url_for('static', filename='export.js') }}?v=4" defer></script>
+<script src="{{ url_for('static', filename='export.js') }}?v=5" defer></script>

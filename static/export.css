@@ -37,4 +37,4 @@
 .publisher-export-result code { display: block; overflow-wrap: anywhere; color: #ffd2bd; }
 .publisher-export-result a, .publisher-export-result button { margin: 10px 8px 0 0; border: 1px solid #675044; border-radius: 9px; padding: 8px 11px; color: #fff; background: #9c421f; cursor: pointer; font: inherit; text-decoration: none; }
 .publisher-export-result button[data-stop-publisher] { background: rgba(255, 255, 255, 0.12); }
-@media (max-width: 520px) { .publisher-export-mode { grid-template-columns: 1fr; } }
+@media (max-width: 720px) { .publisher-export-mode { grid-template-columns: 1fr; } }
