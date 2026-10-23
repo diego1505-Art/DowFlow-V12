@@ -13,14 +13,14 @@ from rich.text import Text
 def _triangle_rows(console: Console, frame_number: int) -> list[Text]:
     """Build a centered, proportional triangle without directional glyph drift."""
     unicode_terminal = console.encoding.lower().startswith("utf")
-    glyph = "●" if unicode_terminal else "#"
-    counts = range(1, 14, 2)
+    glyph = "● " if unicode_terminal else "# "
+    counts = (9, 7, 5, 3, 1)
     highlight_row = (frame_number // 2) % len(counts)
     rows = []
     for row_number, count in enumerate(counts):
-        padding = (13 - count) // 2
+        padding = (9 - count) // 2
         style = "bold #ff5a3d" if row_number == highlight_row else "bold #b82c2e"
-        rows.append(Text(" " * padding + glyph * count, style=style, justify="center"))
+        rows.append(Text("  " * padding + glyph * count, style=style, justify="center"))
     return rows
 
 
